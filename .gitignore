@@ -1,0 +1,7 @@
+node_modules/
+.env
+.DS_Store
+
+# third-party reference images: kept locally, not published
+design-references/
+Screenshot*.png
