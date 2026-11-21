@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SF I-Spy</title>
+  <!-- open connections to YouTube early so the player loads faster -->
+  <link rel="preconnect" href="https://www.youtube.com" />
+  <link rel="preconnect" href="https://www.google.com" />
+  <link rel="preconnect" href="https://i.ytimg.com" />
+  <style>
+    :root { --fg: #fff; --dim: #ffffffaa; --hit: #3ddc84; --miss: #ffcc33; --ice: #8fd8ff; --panel: #000000a8; }
+    html, body { margin: 0; height: 100%; background: #000; color: var(--fg); font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
+    #stage { position: fixed; inset: 0; }
+    /* the YouTube iframe is letterboxed to 16:9 and never receives clicks */
+    #player { position: absolute; border: 0; pointer-events: none; }
+    #catcher { position: absolute; inset: 0; }
+    .frozen #catcher { cursor: crosshair; }
+    .capturing #hud, .capturing #fx, .capturing #toast, .capturing #prompt { visibility: hidden; }
+
+    /* ---- freeze effect ---- */
+    #fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+    #ice { position: absolute; inset: 0; opacity: 0; transition: opacity .4s;
+      background:
+        radial-gradient(ellipse at center, transparent 40%, #5cc2ff70 78%, #1f5fffcc 115%),
+        linear-gradient(180deg, #9fe2ff66 0%, transparent 30%, transparent 70%, #2f6dff77 100%); }
+    .frozen #ice { opacity: 1; }
+    #flash { position: absolute; inset: 0; opacity: 0; background: linear-gradient(135deg, #d6f3ff 0%, #6cc4ff 45%, #2456ff 100%); mix-blend-mode: screen; }
+    #freeze-word { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); opacity: 0; white-space: nowrap;
+      font-size: clamp(64px, 15vw, 220px); font-weight: 900; letter-spacing: .04em; font-style: italic;
+      background: linear-gradient(180deg, #ffffff 0%, #c9f0ff 45%, #5ab8ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+      filter: drop-shadow(0 0 18px #4fb0ffcc) drop-shadow(0 6px 0 #1c4fd6); }
+    .flake { position: absolute; left: 0; top: 0; will-change: transform, opacity; user-select: none; }
+    #box { position: absolute; border: 3px solid var(--hit); border-radius: 6px; display: none; box-shadow: 0 0 0 9999px #00000055; pointer-events: none; }
+    #box span { position: absolute; top: -28px; left: -3px; padding: 3px 8px; border-radius: 4px; font-size: 14px; font-weight: 600; white-space: nowrap; color: #000; }
+    #spot { position: absolute; box-sizing: border-box; border: 4px solid var(--ice); border-radius: 50%; display: none; pointer-events: none;
+      box-shadow: 0 0 0 9999px #00000070, 0 0 14px 4px #8fd8ffaa, inset 0 0 14px #8fd8ff88; }
+    .spotting #box { box-shadow: none; }   /* the spotlight already dims the scene */
+    #catcher { touch-action: manipulation; }
+
+    #hud { position: fixed; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
+    #hud .right { display: flex; gap: 8px; }
+    .pill { background: var(--panel); padding: 8px 14px; border-radius: 999px; font-size: 15px; backdrop-filter: blur(6px); border: 0; color: var(--fg); font-weight: 400; }
+    #sound { pointer-events: auto; cursor: pointer; }
+    #prompt { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); text-align: center; background: var(--panel); padding: 14px 24px; border-radius: 16px; backdrop-filter: blur(8px); display: none; max-width: calc(100% - 64px); }
+    #prompt .spy { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+    #prompt .clue { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    #timer { height: 5px; background: #ffffff33; border-radius: 3px; margin-top: 12px; overflow: hidden; }
+    #timer div { height: 100%; width: 100%; background: var(--fg); transform-origin: left; }
+    #toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 44px; font-weight: 800; text-shadow: 0 3px 18px #000; display: none; pointer-events: none; text-align: center; }
+
+    #menu { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, #1b2440 0%, #05070d 75%); padding: 16px; }
+    #menu .card { max-width: 480px; text-align: center; }
+    #menu h1 { font-size: 44px; margin: 0 0 6px; }
+    #menu p { color: var(--dim); line-height: 1.5; }
+    #menu small { color: #ffffff77; }
+    button.go { font: inherit; font-size: 18px; font-weight: 600; padding: 12px 30px; border-radius: 999px; border: 0; background: #fff; color: #000; cursor: pointer; margin-top: 8px; }
+    button.go:disabled { opacity: .4; cursor: default; }
+    #err { color: #ff8a8a; min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="player"></div>
+    <div id="catcher"></div>
+    <div id="spot"></div><div id="box"><span></span></div>
+  </div>
+  <div id="fx"><div id="ice"></div><div id="flash"></div><div id="freeze-word">FREEZE!</div></div>
+
+  <div id="hud" style="display:none">
+    <div class="pill" id="score">Score 0 / 0</div>
+    <div class="right"><div class="pill" id="status">walking…</div><button class="pill" id="sound">🔇</button></div>
+  </div>
+  <div id="prompt"><div class="spy">I spy with my little eye…</div><div class="clue"></div><div id="timer"><div></div></div></div>
+  <div id="toast"></div>
+
+  <div id="menu"><div class="card">
+    <h1>SF I-Spy 🌁</h1>
+    <p>Walk the streets of San Francisco. Every 8 seconds the world freezes, and you get <b>5 seconds</b> to click what Claude spied.</p>
+    <p><small>When you press Start, your browser asks to share <b>this tab</b>, so Claude can see each frozen frame. Nothing is recorded or saved.</small></p>
+    <button class="go" id="start" disabled>Loading video…</button>
+    <p id="err"></p>
+    <p><small>Footage: “Walking San Francisco, California (February 11, 2025)” by <a href="https://www.youtube.com/@caliwalks" target="_blank" style="color:inherit">Caliwalks</a> on YouTube</small></p>
+  </div></div>
+
+  <script>
+    // ---------- settings ----------
+    const params = new URLSearchParams(location.search);
+    const VIDEO_ID = params.get('v') || 'ovRLPTaV8N8';
+    const START_AT = +(params.get('t') || 30);          // seconds; skip the intro
+    const FREEZE_EVERY = 8, GUESS_TIME = 5, REVEAL_TIME = 1700, SPOT_FRAC = 0.07, SPOT_MIN = 44, SCAN_MS = 350, FRAME_MAX_W = 1280;
+
+    const $ = (s) => document.querySelector(s);
+    let player, capture, state = 'menu', score = 0, played = 0, walked = 0, lastT = null, found = [];
+
+    // ---------- layout: 16:9 letterbox ----------
+    function layout() {
+      const W = innerWidth, H = innerHeight, s = Math.min(W / 16, H / 9);
+      const w = 16 * s, h = 9 * s;
+      Object.assign(document.getElementById('player').style, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px' });
+    }
+    addEventListener('resize', layout); layout();
+    const videoRect = () => document.getElementById('player').getBoundingClientRect();
+
+    // ---------- YouTube player ----------
+    const YT_ERRORS = {
+      2: 'invalid video id', 5: 'the browser could not play this video', 100: 'video not found or private',
+      101: 'the owner does not allow embedding', 150: 'the owner does not allow embedding',
+      153: 'YouTube needs to know which site embeds it (open the page at http://localhost:8000)',
+    };
+    const btn = $('#start');
+    const setBtn = (text, enabled) => { btn.textContent = text; btn.disabled = !enabled; };
+    let warming = true;
+
+    // make sure this page is served by the game server (npm start), not a plain static server
+    let serverOk = false, serverBad = false, videoReady = false;
+    const maybeEnable = () => { if (serverOk && videoReady) setBtn('Start walking', true); };
+    fetch('/api/health').then(r => r.json()).then(h => {
+      serverOk = true; maybeEnable();
+      if (!h.hasKey) $('#err').textContent = 'The game server has no ANTHROPIC_API_KEY. Restart it with: ANTHROPIC_API_KEY=sk-ant-... npm start';
+    }).catch(() => {
+      $('#err').textContent = "This page isn't served by the game server, so Claude can't spot anything. Stop any other server on this port and run: npm start";
+      serverBad = true; setBtn('Game server not running', false);
+    });
+
+    if (location.protocol === 'file:') {
+      $('#err').textContent = 'Open http://localhost:8000 (run `npm start`) instead of the file directly; YouTube will not play from file://.';
+    } else {
+      const tag = document.createElement('script'); tag.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(tag);
+      setTimeout(() => { if (warming && !$('#err').textContent) $('#err').textContent = 'Still loading… if this sticks, an ad or tracker blocker may be blocking YouTube on localhost.'; }, 12000);
+    }
+    window.onYouTubeIframeAPIReady = () => {
+      if (!serverBad) setBtn('Buffering video…', false);
+      player = new YT.Player('player', {
+        videoId: VIDEO_ID,
+        playerVars: { controls: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1, disablekb: 1, fs: 0, mute: 1, start: START_AT, origin: location.origin },
+        events: {
+          // warm up: start playing muted behind the menu so the first seconds are buffered before Start
+          onReady: () => { layout(); player.mute(); player.playVideo(); },
+          onStateChange: (e) => {
+            if (warming && e.data === YT.PlayerState.PLAYING) {
+              warming = false;
+              player.pauseVideo();
+              videoReady = true; maybeEnable();
+            }
+            if (state === 'walking') {
+              if (e.data === YT.PlayerState.BUFFERING) setStatus('⏳ buffering…');
+              if (e.data === YT.PlayerState.PLAYING) setStatus('walking…');
+            }
+          },
+          onError: (e) => { warming = false; setBtn('Video unavailable', false); $('#err').textContent = `YouTube error ${e.data}: ${YT_ERRORS[e.data] || 'unknown problem'}.`; },
+        },
+      });
+    };
+    $('#sound').onclick = () => {
+      if (player.isMuted()) { player.unMute(); $('#sound').textContent = '🔊'; } else { player.mute(); $('#sound').textContent = '🔇'; }
+    };
+
+    // ---------- tab capture (so Claude can see the frame) ----------
+    const capVideo = document.createElement('video'); capVideo.muted = true; capVideo.playsInline = true;
+    const canvas = document.createElement('canvas');
+    async function startCapture() {
+      capture = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'browser', frameRate: 15 }, audio: false,
+        preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude',
+      });
+      capVideo.srcObject = capture;
+      await capVideo.play();
+      capture.getVideoTracks()[0].onended = () => { if (state !== 'menu') stop('Tab sharing stopped.'); };
+    }
+    const nextFrames = (n = 2) => new Promise(r => { const f = () => (--n ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); });
+    async function grabFrame() {
+      document.body.classList.add('capturing');            // hide our UI so it isn't in the shot
+      await nextFrames(2); await new Promise(r => setTimeout(r, 150)); // let the capture stream catch up
+      const rect = videoRect();
+      const sx = capVideo.videoWidth / innerWidth, sy = capVideo.videoHeight / innerHeight;
+      const crop = { x: rect.left * sx, y: rect.top * sy, w: rect.width * sx, h: rect.height * sy };
+      const scale = Math.min(1, FRAME_MAX_W / crop.w);
+      canvas.width = Math.round(crop.w * scale); canvas.height = Math.round(crop.h * scale);
+      canvas.getContext('2d').drawImage(capVideo, crop.x, crop.y, crop.w, crop.h, 0, 0, canvas.width, canvas.height);
+      document.body.classList.remove('capturing');
+      return { image: canvas.toDataURL('image/jpeg', 0.85).split(',')[1], width: canvas.width, height: canvas.height };
+    }
+
+    // ---------- game loop ----------
+    $('#start').onclick = async () => {
+      $('#err').textContent = '';
+      $('#menu').style.display = 'none';
+      player.playVideo(); // start walking right away; the share-tab prompt appears on top
+      try { await startCapture(); }
+      catch {
+        player.pauseVideo();
+        $('#menu').style.display = 'flex';
+        $('#err').textContent = 'Tab sharing is needed so Claude can see the frames. Press Start and choose this tab.';
+        return;
+      }
+      $('#hud').style.display = 'flex';
+      score = played = walked = 0; found = []; lastT = null; updateScore();
+      state = 'walking'; setStatus('walking…');
+      requestAnimationFrame(tick);
+    };
+
+    function tick() {
+      if (state === 'walking' && player.getPlayerState() === YT.PlayerState.PLAYING) {
+        const t = player.getCurrentTime();
+        if (lastT !== null && t > lastT && t - lastT < 1) walked += t - lastT; // count only real playback
+        lastT = t;
+        if (walked >= FREEZE_EVERY) { walked = 0; freeze(); }
+      }
+      if (player.getPlayerState() === YT.PlayerState.ENDED && state === 'walking') stop(`End of the walk! Final score ${score} / ${played}`);
+      if (state !== 'menu') requestAnimationFrame(tick);
+    }
+
+    let current = null, timerAnim = null, deadline = null;
+    async function freeze() {
+      state = 'scanning';
+      player.pauseVideo();
+      await waitFor(() => player.getPlayerState() === YT.PlayerState.PAUSED);
+      let result;
+      try {
+        const frame = await grabFrame();   // grab the clean frame first, then the ice effect
+        document.body.classList.add('frozen');
+        blast();
+        setStatus('🔍 Claude is spying…');
+        const res = await fetch('/api/find', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...frame, avoid: found.slice(-8) }) });
+        result = await res.json().catch(() => { throw new Error('game server not reachable — run npm start'); });
+        if (!res.ok) throw new Error(result.error || 'scan failed');
+      } catch (err) {
+        setStatus(`⚠️ ${err.message}`);
+        return setTimeout(resume, 2500);
+      }
+      if (state !== 'scanning') return;
+      if (!result.found) { setStatus('nothing to spy here'); return setTimeout(resume, 600); }
+      current = result;
+      state = 'guessing'; setStatus('freeze!');
+      $('#prompt .clue').textContent = result.clue;
+      $('#prompt').style.display = 'block';
+      timerAnim = $('#timer div').animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: GUESS_TIME * 1000, fill: 'forwards' });
+      deadline = setTimeout(() => finishRound(null), GUESS_TIME * 1000);
+    }
+    // ---------- FREEZE! effect ----------
+    const ICE = ['❄️', '❄️', '❄️', '🧊', '🧊', '🥶', '⛄', '❅', '❆'];
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    const rand = (a, b) => a + Math.random() * (b - a);
+    let snowTimer = null;
+
+    function blast() {
+      $('#flash').animate([{ opacity: 0 }, { opacity: .85, offset: .15 }, { opacity: 0 }], { duration: 700, easing: 'ease-out' });
+      $('#freeze-word').animate([
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(2.8) rotate(-8deg)' },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(.92) rotate(-4deg)', offset: .14 },
+        { opacity: 1, transform: 'translate(-52%,-50%) scale(1) rotate(-4deg)', offset: .19 },
+        { opacity: 1, transform: 'translate(-48%,-50%) scale(1) rotate(-4deg)', offset: .24 },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1) rotate(-4deg)', offset: .75 },
+        { opacity: 0, transform: 'translate(-50%,-140%) scale(.55) rotate(-4deg)' },
+      ], { duration: 1500, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
+
+      // throw ice emojis out from behind the word, with gravity
+      const cx = innerWidth / 2, cy = innerHeight * 0.42;
+      for (let i = 0; i < 46; i++) {
+        const a = rand(0, Math.PI * 2), v = rand(350, 1100), dur = rand(1.3, 2.2);
+        const vx = Math.cos(a) * v, vy = Math.sin(a) * v - 450, g = 1100, spin = rand(-720, 720);
+        const frames = [];
+        for (let k = 0; k <= 12; k++) {
+          const t = (k / 12) * dur;
+          frames.push({ transform: `translate(${cx + vx * t}px, ${cy + vy * t + 0.5 * g * t * t}px) rotate(${spin * t}deg) scale(${k === 0 ? 0.3 : 1})`, opacity: k > 9 ? 1 - (k - 9) / 3 : 1 });
+        }
+        spawnFlake(rand(22, 60), frames, dur * 1000);
+      }
+
+      // keep a gentle snowfall going while the world is frozen
+      clearInterval(snowTimer);
+      snowTimer = setInterval(() => {
+        const x = rand(0, innerWidth), drift = rand(-80, 80), dur = rand(3500, 6000);
+        spawnFlake(rand(14, 30), [
+          { transform: `translate(${x}px, -40px) rotate(0deg)`, opacity: 0 },
+          { transform: `translate(${x + drift / 2}px, ${innerHeight * .3}px) rotate(90deg)`, opacity: .9, offset: .3 },
+          { transform: `translate(${x + drift}px, ${innerHeight + 40}px) rotate(260deg)`, opacity: .9 },
+        ], dur);
+      }, 160);
+    }
+    function spawnFlake(size, frames, duration) {
+      const el = document.createElement('span');
+      el.className = 'flake'; el.textContent = pick(ICE); el.style.fontSize = size + 'px';
+      $('#fx').appendChild(el);
+      el.animate(frames, { duration, easing: 'linear', fill: 'forwards' }).onfinish = () => el.remove();
+    }
+    function thaw() {
+      clearInterval(snowTimer); snowTimer = null;
+      document.body.classList.remove('frozen');
+    }
+
+    async function waitFor(fn, ms = 3000) { const end = Date.now() + ms; while (!fn() && Date.now() < end) await new Promise(r => setTimeout(r, 50)); }
+
+    // ---------- tapping: a spotlight circle is your guess ----------
+    $('#catcher').addEventListener('pointerdown', e => {
+      if (state === 'scanning') return toast('👀 Claude is still looking…', 900);
+      if (state !== 'guessing') return;
+      e.preventDefault();
+      finishRound({ cx: e.clientX, cy: e.clientY });
+    });
+
+    const spotRadius = (v) => Math.max(SPOT_MIN, SPOT_FRAC * Math.min(v.width, v.height));
+    function boxPx(box, v) {
+      return { left: v.left + box.x0 * v.width, top: v.top + box.y0 * v.height, width: (box.x1 - box.x0) * v.width, height: (box.y1 - box.y0) * v.height };
+    }
+    const px = (r) => ({ left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+
+    function showBox(b, label, color) {
+      const el = $('#box');
+      Object.assign(el.style, px(b), { display: 'block', borderColor: color });
+      const tag = el.querySelector('span'); tag.textContent = label; tag.style.background = color;
+    }
+
+    function finishRound(click) {
+      if (state !== 'guessing') return;
+      state = 'reveal';
+      clearTimeout(deadline); timerAnim?.pause();
+      const { box, label } = current;
+      const v = videoRect(), b = boxPx(box, v), R = spotRadius(v);
+
+      // hit if the spotlight circle overlaps Claude's box
+      let hit = false;
+      if (click) {
+        const nx = Math.min(Math.max(click.cx, b.left), b.left + b.width);
+        const ny = Math.min(Math.max(click.cy, b.top), b.top + b.height);
+        hit = Math.hypot(click.cx - nx, click.cy - ny) <= R;
+      }
+      played++; if (hit) score++; found.push(label);
+
+      if (!click) {
+        showBox(b, label, 'var(--miss)');
+        toast('⏰ Too slow!', REVEAL_TIME);
+        updateScore();
+        return setTimeout(resume, REVEAL_TIME);
+      }
+
+      // 1) spotlight pops in where you tapped, then pulses while it "checks"
+      const spot = $('#spot'), circle = { left: click.cx - R, top: click.cy - R, width: 2 * R, height: 2 * R };
+      Object.assign(spot.style, px(circle), { display: 'block', borderRadius: '50%', borderColor: 'var(--ice)' });
+      document.body.classList.add('spotting');
+      spot.animate([{ transform: 'scale(1.7)', opacity: 0 }, { transform: 'scale(.94)', opacity: 1, offset: .6 }, { transform: 'scale(1)' }], { duration: 220, easing: 'ease-out' });
+      spot.animate([{ boxShadow: '0 0 0 9999px #00000070, 0 0 14px 4px #8fd8ffaa, inset 0 0 14px #8fd8ff88' },
+                    { boxShadow: '0 0 0 9999px #00000070, 0 0 30px 10px #8fd8ffee, inset 0 0 26px #8fd8ffcc' }],
+                   { duration: SCAN_MS / 2, delay: 220, iterations: 2, direction: 'alternate' });
+
+      // 2) verdict
+      setTimeout(() => {
+        if (state !== 'reveal') return;
+        updateScore();
+        if (hit) {
+          // snap the spotlight onto the object
+          spot.style.borderColor = 'var(--hit)';
+          spot.animate([{ ...px(circle), borderRadius: '50%' }, { ...px(b), borderRadius: '8px' }], { duration: 280, easing: 'cubic-bezier(.2,.9,.3,1.2)', fill: 'forwards' });
+          setTimeout(() => showBox(b, label, 'var(--hit)'), 280);
+          toast('✅ Spotted!', REVEAL_TIME);
+        } else {
+          spot.style.borderColor = 'var(--miss)';
+          spot.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-10px)' }, { transform: 'translateX(9px)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(0)' }], { duration: 320 });
+          showBox(b, label, 'var(--miss)');
+          toast('❌ Not quite', REVEAL_TIME);
+        }
+        setTimeout(resume, REVEAL_TIME);
+      }, 220 + SCAN_MS);
+    }
+
+    function hideSpot() {
+      const spot = $('#spot');
+      spot.getAnimations().forEach(a => a.cancel());
+      spot.style.display = 'none';
+      document.body.classList.remove('spotting');
+    }
+
+    function resume() {
+      if (state === 'menu') return;
+      $('#prompt').style.display = 'none'; $('#box').style.display = 'none'; hideSpot();
+      thaw();
+      setStatus('walking…');
+      state = 'walking'; lastT = null;
+      player.playVideo();
+    }
+
+    function stop(msg) {
+      state = 'menu';
+      player.pauseVideo();
+      capture?.getTracks().forEach(t => t.stop());
+      thaw(); hideSpot();
+      $('#prompt').style.display = 'none'; $('#box').style.display = 'none';
+      $('#hud').style.display = 'none'; $('#menu').style.display = 'flex';
+      $('#err').textContent = msg;
+    }
+
+    function updateScore() { $('#score').textContent = `Score ${score} / ${played}`; }
+    function setStatus(s) { $('#status').textContent = s; }
+    let toastTimer;
+    function toast(msg, ms) {
+      const t = $('#toast'); t.textContent = msg; t.style.display = 'block';
+      clearTimeout(toastTimer); if (ms) toastTimer = setTimeout(() => t.style.display = 'none', ms);
+    }
+  </script>
+</body>
+</html>
