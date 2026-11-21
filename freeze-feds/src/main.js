@@ -4,6 +4,7 @@ import { IMG_W, IMG_H, setupCamera, buildWalkGraph, drawDebug } from './scene.js
 import { Crowd } from './crowd.js';
 import { HoverCard, hud, popup, snowBurst, wrongFlash, showScreen } from './ui.js';
 import * as sfx from './sfx.js';
+import { loadMiiModels } from './mii.js';
 
 const ROUND_TIME = 120, BONUS = 10, PENALTY = 10;
 const debug = new URLSearchParams(location.search).has('debug');
@@ -20,6 +21,7 @@ const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9a93b0, 1.7);
 const sun = new THREE.DirectionalLight(0xffffff, 1.9); sun.position.set(-5, 10, 6);
 for (const l of [hemi, sun]) { l.layers.enable(1); scene.add(l); }
 
+await loadMiiModels();                    // Mii bodies, heads, hair and hats (public/models)
 const graph = buildWalkGraph(camera);
 if (debug) drawDebug(scene, graph);
 const crowd = new Crowd(scene, graph);

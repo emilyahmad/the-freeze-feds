@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { buildMii, setBone, setChildBone, armRot, frameOn, outlineMaterial } from './mii.js';
 
-// Placeholder chibi people: big round head, capsule body, toon shading with an outline.
-// Later these can be swapped for SkeletonUtils.clone() of VRoid/VRM bases: crowd.js only relies on
-// the returned Group, `userData.rig` (limbs to swing), `userData.mats` (to tint) and `userData.hitbox`.
-
+// Mii-style people built from the GLB parts in public/models (see src/mii.js): a skinned body, one of
+// 8 head shapes with a drawn-on face, one of 68 hairstyles or a hat, toon shading with an outline.
+// Looks, accessories and props are added on top. crowd.js only relies on the returned Group,
+// `userData.rig` (posed by pose()), `userData.mats` (tinted by encase()) and `userData.hitbox`.
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const chance = (p) => Math.random() < p;
 
@@ -44,38 +45,49 @@ export const CEO_TYPES = [
 ];
 
 // ---- shared geometry ----
-const legGeo = new THREE.CapsuleGeometry(0.075, 0.22, 4, 10).translate(0, -0.185, 0);  // pivot at hip
-const armGeo = new THREE.CapsuleGeometry(0.06, 0.24, 4, 10).translate(0, -0.18, 0);    // pivot at shoulder
-const torsoGeo = new THREE.CapsuleGeometry(0.21, 0.26, 6, 16);
-const vestGeo = new THREE.CapsuleGeometry(0.228, 0.16, 6, 16);
-const headGeo = new THREE.SphereGeometry(0.3, 28, 20);
-const hairGeo = new THREE.SphereGeometry(0.318, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.56);
-const beanieGeo = new THREE.SphereGeometry(0.335, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.42);
-const brimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.025, 20, 1, false, -Math.PI / 2, Math.PI);
-const eyeGeo = new THREE.SphereGeometry(0.036, 10, 8);
-const blushGeo = new THREE.CircleGeometry(0.045, 14);
+
+// Mii parts per CEO: body, head shape, hairstyle (public/models/character-hair) and face
+const CEO_MII = {
+  holmes: { gender: 'female', head: 'head-02', hairModel: 'hair-61', face: { eyes: 'wide', mouth: 'flat' } },
+  zuckerberg: { head: 'head-05', hairModel: 'hair-13', face: { eyes: 'oval', mouth: 'flat' } },
+  huang: { head: 'head-04', hairModel: 'hair-11', face: { eyes: 'happy', mouth: 'open' } },
+  musk: { head: 'head-08', hairModel: 'hair-04', face: { eyes: 'oval', mouth: 'smirk' } },
+  thiel: { head: 'head-03', hairModel: 'hair-32', face: { eyes: 'dot', mouth: 'flat' } },
+  karp: { head: 'head-06', hairModel: 'hair-30', face: { eyes: 'oval', mouth: 'open' } },
+  gates: { head: 'head-01', hairModel: 'hair-35', face: { eyes: 'dot', mouth: 'smile' } },
+  bezos: { head: 'head-07', hairModel: null, face: { eyes: 'oval', mouth: 'open' } },
+  dimon: { head: 'head-03', hairModel: 'hair-06', face: { eyes: 'dot', mouth: 'smirk', browTilt: -1 } },
+  buffett: { head: 'head-01', hairModel: 'hair-29', face: { eyes: 'happy', mouth: 'smile', bushy: true } },
+};
+
+// hairstyles for everyone else, by style
+const HAIR_STYLES = {
+  short: ['hair-01', 'hair-02', 'hair-04', 'hair-05', 'hair-12', 'hair-15', 'hair-16', 'hair-17', 'hair-18', 'hair-21', 'hair-24', 'hair-28', 'hair-31', 'hair-10', 'hair-26', 'hair-39'],
+  long: ['hair-34', 'hair-37', 'hair-42', 'hair-44', 'hair-45', 'hair-46', 'hair-49', 'hair-50', 'hair-53', 'hair-56', 'hair-58', 'hair-66'],
+  bun: ['hair-61', 'hair-62', 'hair-59', 'hair-40', 'hair-60', 'hair-63'],
+};
+const FACE_EYES = ['oval', 'oval', 'dot', 'lash', 'happy'], FACE_MOUTHS = ['smile', 'smile', 'open', 'flat', 'smirk'];
+const randomFace = () => ({ eyes: pick(FACE_EYES), mouth: pick(FACE_MOUTHS), browTilt: pick([-1, 0, 0, 1]), blush: chance(0.3) });
+const HEADS = ['head-01', 'head-02', 'head-03', 'head-04', 'head-05', 'head-06', 'head-07', 'head-08'];
+
+// ---- prop / accessory geometry (metres, in the character frame: x right, y up, z forward) ----
 const lensGeo = new THREE.TorusGeometry(0.065, 0.013, 6, 18);
 const shadeGeo = new THREE.BoxGeometry(0.13, 0.075, 0.03);
 const barGeo = new THREE.BoxGeometry(0.08, 0.016, 0.016);
 const phoneGeo = new THREE.BoxGeometry(0.085, 0.15, 0.018);
 const budGeo = new THREE.SphereGeometry(0.035, 8, 6);
-const neckGeo = new THREE.CylinderGeometry(0.15, 0.17, 0.12, 18);
-const hoodGeo = new THREE.TorusGeometry(0.19, 0.075, 8, 20);
-const cordGeo = new THREE.TorusGeometry(0.17, 0.012, 6, 24);
-const badgeGeo = new THREE.BoxGeometry(0.09, 0.12, 0.012);
-const tieGeo = new THREE.BoxGeometry(0.055, 0.24, 0.02);
-const collarGeo = new THREE.BoxGeometry(0.14, 0.12, 0.02);
-const bagGeo = new THREE.BoxGeometry(0.26, 0.3, 0.08);
-const strapGeo = new THREE.TorusGeometry(0.26, 0.012, 6, 24, Math.PI);
-const longHairGeo = new THREE.CapsuleGeometry(0.2, 0.22, 4, 12);
-const bunGeo = new THREE.SphereGeometry(0.12, 14, 10);
-const curlGeo = new THREE.SphereGeometry(0.075, 10, 8);
-const browGeo = new THREE.BoxGeometry(0.1, 0.03, 0.03);
-const headsetGeo = new THREE.BoxGeometry(0.42, 0.16, 0.14);
-const headStrapGeo = new THREE.TorusGeometry(0.305, 0.022, 6, 28);
-const jacketGeo = new THREE.CapsuleGeometry(0.232, 0.22, 6, 16);
-const scarfGeo = new THREE.TorusGeometry(0.16, 0.065, 8, 20);
-const scarfTailGeo = new THREE.BoxGeometry(0.1, 0.28, 0.04);
+const neckGeo = new THREE.CylinderGeometry(0.085, 0.1, 0.1, 18);
+const hoodGeo = new THREE.TorusGeometry(0.12, 0.055, 8, 20);
+const cordGeo = new THREE.TorusGeometry(0.11, 0.009, 6, 24);
+const badgeGeo = new THREE.BoxGeometry(0.08, 0.1, 0.012);
+const tieGeo = new THREE.BoxGeometry(0.045, 0.2, 0.02);
+const collarGeo = new THREE.BoxGeometry(0.11, 0.09, 0.02);
+const bagGeo = new THREE.BoxGeometry(0.24, 0.27, 0.07);
+const strapGeo = new THREE.TorusGeometry(0.22, 0.01, 6, 24, Math.PI);
+const headsetGeo = new THREE.BoxGeometry(0.4, 0.15, 0.14);
+const headStrapGeo = new THREE.TorusGeometry(0.3, 0.022, 6, 28);
+const scarfGeo = new THREE.TorusGeometry(0.1, 0.05, 8, 20);
+const scarfTailGeo = new THREE.BoxGeometry(0.08, 0.24, 0.035);
 const deviceGeo = new THREE.BoxGeometry(0.1, 0.07, 0.1);
 const gpuGeo = new THREE.BoxGeometry(0.26, 0.04, 0.14);
 const canGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.13, 14);
@@ -84,10 +96,12 @@ const basinGeo = new THREE.BoxGeometry(0.34, 0.02, 0.22);
 const tapGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.14, 8);
 const cardboardGeo = new THREE.BoxGeometry(0.36, 0.26, 0.28);
 const tapeGeo = new THREE.BoxGeometry(0.37, 0.27, 0.06);
-const shadowGeo = new THREE.CircleGeometry(0.34, 24).rotateX(-Math.PI / 2);
-const hitGeo = new THREE.CylinderGeometry(0.42, 0.42, 1.7, 10).translate(0, 0.85, 0);
+const shadowGeo = new THREE.CircleGeometry(0.3, 24).rotateX(-Math.PI / 2);
+const hitGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.65, 10).translate(0, 0.83, 0);
 const iceGeo = new THREE.BoxGeometry(0.95, 1.8, 0.85).translate(0, 0.9, 0);
 const iceEdges = new THREE.EdgesGeometry(iceGeo);
+
+const MII_SCALE = 0.9;            // the Mii model is ~1.76 m to the top of the head; this makes ~1.6
 
 const toonGradient = (() => {
   const t = new THREE.DataTexture(new Uint8Array([110, 185, 255]), 3, 1, THREE.RedFormat);
@@ -96,7 +110,6 @@ const toonGradient = (() => {
 const shadowMat = new THREE.MeshBasicMaterial({ color: 0x1b1630, transparent: true, opacity: 0.28, depthWrite: false });
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 const darkMat = new THREE.MeshBasicMaterial({ color: 0x1d1830 });
-const blushMat = new THREE.MeshBasicMaterial({ color: 0xff8fa8, transparent: true, opacity: 0.55 });
 const iceMat = new THREE.MeshStandardMaterial({ color: 0xbfeaff, transparent: true, opacity: 0.4, roughness: 0.08, metalness: 0.1, depthWrite: false });
 const iceLineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
 
@@ -107,8 +120,10 @@ export function randomLook() {
   const [shirt] = pick(SHIRTS);
   const look = {
     skin: pick(SKINS), hair: pick(HAIRS), hairStyle: pick(['short', 'short', 'long', 'bun', 'bald']),
-    shirt, pants: pick(PANTS), outfit: null,
+    shirt, pants: pick(PANTS), outfit: null, head: pick(HEADS), face: randomFace(),
   };
+  look.gender = look.hairStyle === 'long' || look.hairStyle === 'bun' ? (chance(0.8) ? 'female' : 'male') : (chance(0.15) ? 'female' : 'male');
+  look.hairModel = look.hairStyle === 'bald' ? null : pick(HAIR_STYLES[look.hairStyle]);
   if (chance(0.12)) look.outfit = 'hoodie';
   else if (chance(0.08)) { look.outfit = 'vest'; look.vest = pick(ACCENTS)[0]; }
   if (chance(0.3)) { look.hat = pick(['beanie', 'cap']); look.hatColor = pick(ACCENTS)[0]; }
@@ -117,8 +132,9 @@ export function randomLook() {
   if (chance(0.25)) look.phone = true;
   return look;
 }
-export const ceoLook = (type) => ({ ...type.look, info: type.info, name: type.name });
-export const assistantLook = () => ({ skin: pick(SKINS), hair: pick(HAIRS), hairStyle: 'short', pants: '#1c1c22', shirt: '#26262e', outfit: 'assistant', glasses: 'sun', earbuds: true });
+export const ceoLook = (type) => ({ ...type.look, ...CEO_MII[type.id], info: type.info, name: type.name });
+export const assistantLook = () => ({ skin: pick(SKINS), hair: pick(HAIRS), hairStyle: 'short', hairModel: pick(HAIR_STYLES.short), head: pick(HEADS),
+  face: { eyes: 'dot', mouth: 'flat' }, pants: '#1c1c22', shirt: '#26262e', outfit: 'assistant', glasses: 'sun', earbuds: true });
 
 /** One-line description for the hover card. */
 export function describe(look) {
@@ -145,102 +161,83 @@ export function makePerson(look) {
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
   const mats = [];
-  const outlineMat = new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide });
+  const outlineMat = outlineMaterial(OUTLINE, 1.4);                  // body geometry is in cm
+  const outlineHeadMat = outlineMaterial(OUTLINE, 0.012);            // head geometry is in metres
+  const outlineSolid = new THREE.MeshBasicMaterial({ side: THREE.BackSide });  // scaled-up hulls for props
+  outlineHeadMat.color = outlineSolid.color = outlineMat.color;      // one colour for all (highlight / ice)
   const toon = (color) => { const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient }); mats.push(m); return m; };
   const part = (geo, mat, parent, [x, y, z] = [0, 0, 0], outline = 1.07) => {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m);
-    if (outline) { const o = new THREE.Mesh(geo, outlineMat); o.scale.setScalar(outline); m.add(o); }
+    if (outline) { const o = new THREE.Mesh(geo, outlineSolid); o.scale.setScalar(outline); m.add(o); }
     return m;
   };
 
-  const skin = toon(look.skin), shirt = toon(look.shirt), pants = toon(look.pants), hair = toon(look.hair);
+  // outfit colours per body part
+  const suitish = look.outfit === 'suit' || look.outfit === 'assistant';
+  const colors = {
+    skin: look.skin, hair: look.hair,
+    torso: look.outfit === 'vest' ? look.vest : look.jacket || look.shirt,
+    sleeve: look.jacket || look.shirt,
+    hand: look.skin, legs: look.pants,
+    shoes: suitish ? '#141418' : '#2c2a30',
+  };
+  const face = { eyes: 'oval', mouth: 'smile', browTilt: 0, ...look.face, brow: look.brows || (look.hairStyle === 'bald' ? '#5a4030' : look.hair) };
+  if (look.bigEyes) face.eyes = 'wide';
+  const mii = buildMii({
+    gender: look.gender || 'male', head: look.head, hair: look.hairModel, hat: look.hat, hatColor: look.hatColor,
+    face, toon, outlineMat, outlineHeadMat, colors,
+  });
+  mii.model.scale.setScalar(MII_SCALE);
+  body.add(mii.model);
+  const { headFrame: hf, faceFront: fz, eyeY: ey, handR, handL } = mii;
+  const chest = frameOn(mii.bones.chest);        // torso frame, origin at the chest bone (0.7 m up the body)
 
-  // legs + torso + arms
-  const legL = part(legGeo, pants, body, [-0.1, 0.4, 0], 1.12), legR = part(legGeo, pants, body, [0.1, 0.4, 0], 1.12);
-  part(torsoGeo, shirt, body, [0, 0.66, 0]);
-  const armL = part(armGeo, shirt, body, [-0.27, 0.9, 0], 1.14), armR = part(armGeo, shirt, body, [0.27, 0.9, 0], 1.14);
-  armL.rotation.z = -0.12; armR.rotation.z = 0.12;
-  part(new THREE.SphereGeometry(0.065, 10, 8), skin, armL, [0, -0.38, 0], 0);
-  const handR = part(new THREE.SphereGeometry(0.065, 10, 8), skin, armR, [0, -0.38, 0], 0);
-
-  // head
-  const head = new THREE.Group(); head.position.set(0, 1.26, 0); body.add(head);
-  part(headGeo, skin, head, [0, 0, 0], 1.045);
-  for (const x of [-0.1, 0.1]) {
-    part(eyeGeo, darkMat, head, [x, 0.0, 0.275], 0).scale.setScalar(look.bigEyes ? 1.5 : 1);
-    if (look.brows) part(browGeo, toon(look.brows), head, [x, 0.15, 0.27], 0).scale.set(1.4, 2, 1);
-    const b = part(blushGeo, blushMat, head, [x * 1.7, -0.08, 0.255], 0); b.rotation.y = x * 2.2;
-  }
-  if (look.hairStyle !== 'bald' || look.hat) {
-    if (!look.hat || look.hat === 'cap') {
-      const h = part(hairGeo, hair, head, [0, 0.01, -0.01], 0);
-      h.rotation.x = { receding: -0.8, swept: -0.3, puff: -0.55 }[look.hairStyle] ?? -0.38;
-      if (look.hairStyle === 'swept') h.scale.set(1.04, 1.12, 1.06);
-      if (look.hairStyle === 'puff') { h.scale.set(1.3, 1.25, 1.3); h.position.set(0, 0.04, -0.06); }
-    }
-    if (look.hairStyle === 'curly' || look.hairStyle === 'puff') {   // bumpy curls on top
-      const r = look.hairStyle === 'puff' ? 0.4 : 0.3, big = look.hairStyle === 'puff' ? 1.6 : 1;
-      for (let k = 0; k < 9; k++) {
-        const a = (k / 9) * Math.PI * 2, tilt = 0.55 + (k % 3) * 0.2;
-        const c = part(curlGeo, hair, head, [Math.cos(a) * Math.sin(tilt) * r, Math.cos(tilt) * r + 0.02, Math.sin(a) * Math.sin(tilt) * r - 0.06], 0);
-        c.scale.setScalar(big);
-      }
-    }
-    if (look.hairStyle === 'long') part(longHairGeo, hair, head, [0, -0.2, -0.16], 1.04);
-    if (look.hairStyle === 'bun' && !look.hat) part(bunGeo, hair, head, [0, 0.27, -0.18], 1.06);
-  }
-  if (look.hat === 'beanie') { const b = part(beanieGeo, toon(look.hatColor), head, [0, 0.02, 0], 1.04); b.rotation.x = -0.2; part(bunGeo, toon('#ffffff'), head, [0, 0.36, -0.06], 0).scale.setScalar(0.6); }
-  if (look.hat === 'cap') { const c = toon(look.hatColor); const cap = part(beanieGeo, c, head, [0, 0.03, 0], 1.04); cap.rotation.x = -0.15; part(brimGeo, c, head, [0, 0.12, 0.2], 1.08); }
+  // head accessories (head frame: origin at the neck, face at z = fz, eyes at y = ey)
   if (look.glasses === 'round') {
-    for (const x of [-0.1, 0.1]) part(lensGeo, darkMat, head, [x, 0.0, 0.29], 0);
-    part(barGeo, darkMat, head, [0, 0.0, 0.3], 0).scale.x = 0.5;
+    for (const x of [-0.092, 0.092]) part(lensGeo, darkMat, hf, [x, ey, fz + 0.012], 0);
+    part(barGeo, darkMat, hf, [0, ey, fz + 0.02], 0).scale.x = 0.4;
   }
   if (look.glasses === 'sun') {
-    for (const x of [-0.1, 0.1]) part(shadeGeo, darkMat, head, [x, 0.0, 0.29], 0);
-    part(barGeo, darkMat, head, [0, 0.01, 0.3], 0);
+    for (const x of [-0.092, 0.092]) part(shadeGeo, darkMat, hf, [x, ey, fz + 0.012], 0);
+    part(barGeo, darkMat, hf, [0, ey + 0.01, fz + 0.02], 0);
   }
-  if (look.earbuds) for (const x of [-0.3, 0.3]) part(budGeo, toon('#ffffff'), head, [x, -0.02, 0.03], 0);
+  if (look.earbuds) for (const x of [-0.27, 0.27]) part(budGeo, toon('#ffffff'), hf, [x, ey - 0.03, 0.03], 0);
   if (look.headset) {
-    part(headsetGeo, toon('#ececf2'), head, [0, 0.02, 0.24]);
-    part(new THREE.BoxGeometry(0.36, 0.11, 0.02), darkMat, head, [0, 0.02, 0.315], 0);
-    part(headStrapGeo, darkMat, head, [0, 0.03, 0], 0).rotation.x = Math.PI / 2;
+    part(headsetGeo, toon('#ececf2'), hf, [0, ey + 0.01, fz - 0.03]);
+    part(new THREE.BoxGeometry(0.34, 0.1, 0.02), darkMat, hf, [0, ey + 0.01, fz + 0.045], 0);
+    part(headStrapGeo, darkMat, hf, [0, ey + 0.02, 0.0], 0).rotation.x = Math.PI / 2;
   }
 
-  // outfits
-  if (look.outfit === 'turtleneck') part(neckGeo, shirt, body, [0, 0.99, 0]);
-  if (look.outfit === 'suit' || look.outfit === 'assistant' || look.outfit === 'sweater') {
-    part(collarGeo, toon(look.collar || '#ffffff'), body, [0, 0.9, 0.17], 0).rotation.x = -0.35;
+  // torso accessories (chest frame: neck at y ≈ 0.39, shoulders ≈ 0.33, chest front at z ≈ 0.12)
+  if (look.outfit === 'turtleneck') part(neckGeo, mii.parts.torso, chest, [0, 0.4, 0.0], 1.1);
+  if (suitish || look.outfit === 'sweater') {
+    part(collarGeo, toon(look.collar || '#ffffff'), chest, [0, 0.33, 0.1], 0).rotation.x = -0.35;
     const tie = look.tie === undefined ? (look.outfit === 'suit' ? '#d93a3a' : null) : look.tie;
-    if (tie) part(tieGeo, toon(tie), body, [0, 0.8, 0.205], 0).rotation.x = -0.12;
-  }
-  if (look.jacket) {
-    const jm = toon(look.jacket);
-    part(jacketGeo, jm, body, [0, 0.67, 0]);
-    armL.material = jm; armR.material = jm;
+    if (tie) part(tieGeo, toon(tie), chest, [0, 0.22, 0.13], 0).rotation.x = -0.15;
   }
   if (look.scarf) {
     const sm = toon(look.scarf);
-    part(scarfGeo, sm, body, [0, 0.98, 0.01]).rotation.x = Math.PI / 2;
-    part(scarfTailGeo, sm, body, [0.09, 0.8, 0.21], 0).rotation.z = 0.12;
+    part(scarfGeo, sm, chest, [0, 0.39, 0.0]).rotation.x = Math.PI / 2;
+    part(scarfTailGeo, sm, chest, [0.06, 0.24, 0.13], 0).rotation.z = 0.12;
   }
-  if (look.outfit === 'hoodie') { const h = part(hoodGeo, shirt, body, [0, 1.02, -0.13]); h.rotation.x = -1.1; }
-  if (look.outfit === 'vest') part(vestGeo, toon(look.vest), body, [0, 0.7, 0]);
+  if (look.outfit === 'hoodie') { const h = part(hoodGeo, mii.parts.torso, chest, [0, 0.36, -0.1]); h.rotation.x = -1.1; }
   if (look.lanyard) {
-    const c = part(cordGeo, toon('#e84a7a'), body, [0, 0.86, 0.06], 0); c.rotation.x = -1.25;
-    part(badgeGeo, toon('#ffffff'), body, [0, 0.7, 0.215], 0);
+    const c = part(cordGeo, toon('#e84a7a'), chest, [0, 0.33, 0.04], 0); c.rotation.x = -1.25;
+    part(badgeGeo, toon('#ffffff'), chest, [0, 0.2, 0.14], 0);
   }
   if (look.bag) {
     const bm = toon(look.bag);
-    part(bagGeo, bm, body, [-0.33, 0.52, 0.02]);
-    const s = part(strapGeo, bm, body, [-0.2, 0.67, 0.02], 0); s.rotation.z = 0.5;
+    part(bagGeo, bm, chest, [-0.26, -0.12, 0.0]);
+    const s = part(strapGeo, bm, chest, [-0.12, 0.1, 0.0], 0); s.rotation.z = 0.5;
   }
+
+  // props in the right hand (hand frame: arm along −y, z forward, origin at the wrist)
   let phone = null;
-  if (look.phone) { phone = part(phoneGeo, darkMat, handR, [0, 0, 0.05], 0); phone.rotation.x = -0.4; }
-  // one-hand props (held up like a phone)
-  if (look.carry === 'device') phone = part(deviceGeo, toon('#ffffff'), handR, [0, 0, 0.06]);
-  if (look.carry === 'gpu') { phone = part(gpuGeo, toon('#76b900'), handR, [0, 0, 0.07]); part(new THREE.BoxGeometry(0.2, 0.045, 0.1), darkMat, phone, [0, 0.005, 0], 0); }
-  if (look.carry === 'soda') phone = part(canGeo, toon('#c8202c'), handR, [0, 0, 0.05]);
-  // two-hand props (held in front)
+  if (look.phone) { phone = part(phoneGeo, darkMat, handR, [0, -0.06, 0.06], 0); phone.rotation.x = -0.4; }
+  if (look.carry === 'device') phone = part(deviceGeo, toon('#ffffff'), handR, [0, -0.06, 0.08]);
+  if (look.carry === 'gpu') { phone = part(gpuGeo, toon('#76b900'), handR, [0, -0.06, 0.09]); part(new THREE.BoxGeometry(0.2, 0.045, 0.1), darkMat, phone, [0, 0.005, 0], 0); }
+  if (look.carry === 'soda') phone = part(canGeo, toon('#c8202c'), handR, [0, -0.06, 0.07]);
+  // two-hand props, held in front of the body
   let twoHand = false;
   if (look.carry === 'sink') {
     twoHand = true;
@@ -250,7 +247,7 @@ export function makePerson(look) {
   }
   if (look.carry === 'box') {
     twoHand = true;
-    const box = part(cardboardGeo, toon('#c8955a'), body, [0, 0.62, 0.36]);
+    const box = part(cardboardGeo, toon('#c8955a'), body, [0, 0.62, 0.34]);
     part(tapeGeo, toon('#e3c08f'), box, [0, 0, 0], 0);
   }
 
@@ -258,36 +255,46 @@ export function makePerson(look) {
   const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.position.y = 0.01; shadow.renderOrder = -1; root.add(shadow);
   const hitbox = new THREE.Mesh(hitGeo, hitMat); root.add(hitbox);
 
-  root.userData = { rig: { body, head, legL, legR, armL, armR }, mats, outlineMat, hitbox, look, handProp: !!phone, twoHand };
+  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, hitbox, look, handProp: !!phone, twoHand };
   return root;
 }
 
+const qUpL = new THREE.Quaternion(), qUpR = new THREE.Quaternion(), qLoL = new THREE.Quaternion(), qLoR = new THREE.Quaternion();
 /**
  * Pose for one frame.
  * phase: walk-cycle phase · amp: 0 (standing) … 1 (full stride)
  * mode: 'walk' | 'phone' (head down, as if reading) | 'pitch' (both arms waving)
+ * Arm angles are for an arm hanging straight down: x swings it forward (−) / back (+), z lifts it
+ * outward (− on the left arm, + on the right). Each arm has an upper (u) and a forearm (f) angle.
  */
 export function pose(person, phase, amp, mode, t) {
-  const { body, head, legL, legR, armL, armR } = person.userData.rig;
+  const { body, head, legL, legR, armL, armR, foreL, foreR } = person.userData.rig;
   const s = Math.sin(phase) * amp;
-  legL.rotation.x = s * 0.7; legR.rotation.x = -s * 0.7;
-  body.position.y = Math.abs(Math.cos(phase)) * 0.045 * amp;
+  const L = { ux: -s * 0.7, uz: -0.1, fx: -s * 0.7 - 0.15, fz: -0.1 };
+  const R = { ux: s * 0.7, uz: 0.1, fx: s * 0.7 - 0.15, fz: 0.1 };
+  let hx = 0;
+  body.position.y = Math.abs(Math.cos(phase)) * 0.04 * amp;
   body.rotation.z = Math.sin(phase) * 0.04 * amp;
-  head.rotation.x = 0;
-  armL.rotation.x = -s * 0.8; armR.rotation.x = s * 0.8;
-  armL.rotation.z = -0.12; armR.rotation.z = 0.12;
-  if (person.userData.handProp && mode !== 'pitch') { armR.rotation.x = -1.25; armR.rotation.z = -0.25; }
-  if (mode === 'phone') head.rotation.x = 0.35;
-  if (person.userData.twoHand && mode !== 'pitch') {
-    armL.rotation.x = armR.rotation.x = -1.1 + s * 0.08;
-    armL.rotation.z = 0.3; armR.rotation.z = -0.3;
+  if (person.userData.handProp && mode !== 'pitch') Object.assign(R, { ux: -0.45, uz: 0.05, fx: -1.45, fz: -0.45 });   // phone up in front of the chest
+  if (mode === 'phone') hx = 0.35;
+  if (person.userData.twoHand && mode !== 'pitch') {                                                                   // carrying something big
+    const b = s * 0.06;
+    Object.assign(L, { ux: -0.35 + b, uz: -0.12, fx: -1.3 + b, fz: -0.1 });
+    Object.assign(R, { ux: -0.35 + b, uz: 0.12, fx: -1.3 + b, fz: 0.1 });
   }
   if (mode === 'pitch') {
-    armL.rotation.x = -1.6 + Math.sin(t * 9) * 0.5; armL.rotation.z = -0.5;
-    armR.rotation.x = -1.3 + Math.sin(t * 9 + 1.5) * 0.5; armR.rotation.z = 0.5;
+    const w = Math.sin(t * 9) * 0.5, w2 = Math.sin(t * 9 + 1.5) * 0.5;
+    Object.assign(L, { ux: -1.1 + w, uz: -0.45, fx: -2.0 + w, fz: -0.2 });
+    Object.assign(R, { ux: -0.9 + w2, uz: 0.45, fx: -1.8 + w2, fz: 0.2 });
     body.position.y = Math.abs(Math.sin(t * 9)) * 0.07;
-    head.rotation.x = Math.sin(t * 4.5) * 0.12;
+    hx = Math.sin(t * 4.5) * 0.12;
   }
+  setBone(legL, s * 0.6, 0, 0); setBone(legR, -s * 0.6, 0, 0);
+  armRot(-1, L.ux, L.uz, qUpL); armRot(-1, L.fx, L.fz, qLoL);
+  armRot(1, R.ux, R.uz, qUpR); armRot(1, R.fx, R.fz, qLoR);
+  setBone(armL, 0, 0, 0, qUpL); setChildBone(foreL, qUpL, qLoL);
+  setBone(armR, 0, 0, 0, qUpR); setChildBone(foreR, qUpR, qLoR);
+  setBone(head, hx, 0, 0);
 }
 
 /** Encase a person in ice: tint them icy and add a translucent block. Returns the block (scale it in). */
