@@ -34,7 +34,7 @@
 <main>
   <header>
     <h1>❄ The Freeze Feds ❄</h1>
-    <p>Two winter web toys. Pick one.</p>
+    <p>Three winter web toys. Pick one.</p>
   </header>
 
   <div class="grid">
@@ -65,18 +65,34 @@
         <span class="status" id="spy-status">checking server…</span>
       </div>
     </section>
+    <section class="card">
+      <div class="icon">🕵️</div>
+      <h2>The Freeze Feds</h2>
+      <p>A crowd strolls through California &amp; Powell. Hover to inspect people and click the ten tech and finance bosses to freeze them in ice before time runs out.</p>
+      <ul>
+        <li>Needs its own dev server: <code>cd freeze-feds && npm install && npm run dev</code></li>
+        <li>Mouse or trackpad recommended</li>
+      </ul>
+      <div class="actions">
+        <a class="btn" href="http://localhost:5173/">Open The Freeze Feds</a>
+        <span class="status" id="feds-status">checking server…</span>
+      </div>
+    </section>
   </div>
 
   <footer>See README.md for how to run each project.</footer>
 </main>
 
 <script>
-  // SF I-Spy runs on its own server (default port 8000). Show whether it's up.
-  const SPY_URL = 'http://localhost:8000/';
-  const status = document.getElementById('spy-status');
-  fetch(SPY_URL + 'api/health', { mode: 'no-cors', cache: 'no-store' })
-    .then(() => { status.textContent = '● server running'; status.className = 'status ok'; })
-    .catch(() => { status.textContent = '○ server not running — see the command above'; status.className = 'status warn'; });
+  // SF I-Spy (port 8000) and The Freeze Feds (port 5173) run on their own servers. Show whether each is up.
+  function check(url, id) {
+    const status = document.getElementById(id);
+    fetch(url, { mode: 'no-cors', cache: 'no-store' })
+      .then(() => { status.textContent = '● server running'; status.className = 'status ok'; })
+      .catch(() => { status.textContent = '○ server not running — see the command above'; status.className = 'status warn'; });
+  }
+  check('http://localhost:8000/api/health', 'spy-status');
+  check('http://localhost:5173/', 'feds-status');
 </script>
 </body>
 </html>

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+
+# character models are local-only (third-party assets); keep the README
+public/models/*
+!public/models/README.md

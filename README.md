@@ -2,12 +2,13 @@
 
 ⋆❆˚｡₊⊹❅⋆
 
-Two winter-themed browser games, each in its own folder:
+Three winter-themed browser games, each in its own folder:
 
 | Folder | Game | What it is | Needs |
 |---|---|---|---|
 | [`be-elsa/`](be-elsa/) | **Be Elsa** (Ice Magic) | Use your hands in front of the webcam to make snow, frost, snowballs, ice towers, aurora and snow buddies | Webcam, internet, any static web server |
 | [`sf-i-spy/`](sf-i-spy/) | **SF I-Spy** | Walk through San Francisco; every 8 s the video freezes and you have 5 s to tap what Claude spotted | Node 18+, an Anthropic API key, Chrome or Edge |
+| [`freeze-feds/`](freeze-feds/) | **The Freeze Feds** | A crowd walks around California & Powell; hover to inspect people and click the ten tech and finance bosses (parody caricatures) to freeze them in ice before the clock runs out | Node 18+ |
 
 ```
 the-freeze-feds/
@@ -17,8 +18,11 @@ the-freeze-feds/
 │   ├── standalone.html   same game in a single file
 │   ├── css/  js/
 │   └── README.md
-└── sf-i-spy/             SF I-Spy (Node server + page)
-    ├── index.html  server.mjs  package.json
+├── sf-i-spy/             SF I-Spy (Node server + page)
+│   ├── index.html  server.mjs  package.json
+│   └── README.md
+└── freeze-feds/          The Freeze Feds (Vite + Three.js)
+    ├── index.html  src/  public/street.webp
     └── README.md
 ```
 
@@ -60,6 +64,20 @@ Then open **http://localhost:8000**, press **Start walking**, and share **this t
 - Another port: `PORT=3001 npm start`.
 - The launcher's SF I-Spy button links to http://localhost:8000 and shows whether this server is running.
 
+### 🧊 The Freeze Feds
+
+```sh
+cd the-freeze-feds/freeze-feds
+npm install                               # first time only
+npm run dev
+```
+
+Then open **http://localhost:5173** and press **Start the shift**. Ten tech and finance bosses (parody caricatures) are hiding in the crowd. Hover over people to inspect them, and click a boss to freeze them in ice (+10 s). Clicking anyone else costs 10 s. The round lasts 120 s.
+
+- `?debug` (http://localhost:5173/?debug) shows the walk paths and pixel coordinates, for lining people up with the photo.
+- `npm run build` makes a static `dist/` folder you can host on GitHub Pages or itch.io.
+- More detail: [`freeze-feds/README.md`](freeze-feds/README.md).
+
 ## Be Elsa: gestures
 
 A lavender dusk winter scene drawn on a full-screen canvas. MediaPipe's hand tracker follows your hand through the webcam, and each gesture triggers an effect:
@@ -86,7 +104,7 @@ The footage is "Walking San Francisco, California (February 11, 2025)" by [Caliw
 2. The page captures the frame and sends it to `server.mjs`, which asks Claude (`claude-opus-5-5`) to pick something San Francisco-specific (a Waymo, an AI billboard, a cable car…) and return a clue and its location.
 3. You have 5 seconds to tap it. Your tap lights up a spotlight circle: if it touches the object it snaps on in green, otherwise it shakes and Claude's answer appears in yellow.
 
-Options: `?v=<youtubeId>&t=<seconds>` for another video or start time, the timing constants at the top of the script in `sf-i-spy/index.html`, and what Claude looks for in `PROMPT` in `sf-i-spy/server.mjs`. More detail: [`sf-i-spy/README.md`](sf-i-spy/README.md).
+Options: `?v=<youtubeId>&t=<seconds>&speed=<0.25–2>` for another video, start time or playback speed (default 2×), the timing constants at the top of the script in `sf-i-spy/index.html`, and what Claude looks for in `PROMPT` in `sf-i-spy/server.mjs`. More detail: [`sf-i-spy/README.md`](sf-i-spy/README.md).
 
 ## Keeping your API key safe
 

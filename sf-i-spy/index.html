@@ -12,7 +12,9 @@
     :root { --fg: #fff; --dim: #ffffffaa; --hit: #3ddc84; --miss: #ffcc33; --ice: #8fd8ff; --panel: #000000a8; }
     html, body { margin: 0; height: 100%; background: #000; color: var(--fg); font-family: system-ui, -apple-system, sans-serif; overflow: hidden; }
     #stage { position: fixed; inset: 0; }
-    /* the YouTube iframe is letterboxed to 16:9 and never receives clicks */
+    /* #view is the visible 16:9 letterbox. The YouTube iframe inside it is oversized and clipped,
+       so YouTube's title bar, logo and pause overlays sit outside the visible area. It never receives clicks. */
+    #view { position: absolute; overflow: hidden; background: #000; }
     #player { position: absolute; border: 0; pointer-events: none; }
     #catcher { position: absolute; inset: 0; }
     .frozen #catcher { cursor: crosshair; }
@@ -61,7 +63,7 @@
 </head>
 <body>
   <div id="stage">
-    <div id="player"></div>
+    <div id="view"><div id="player"></div></div>
     <div id="catcher"></div>
     <div id="spot"></div><div id="box"><span></span></div>
   </div>
@@ -88,19 +90,24 @@
     const params = new URLSearchParams(location.search);
     const VIDEO_ID = params.get('v') || 'ovRLPTaV8N8';
     const START_AT = +(params.get('t') || 30);          // seconds; skip the intro
+    const SPEED = +(params.get('speed') || 2);         // playback speed; YouTube allows 0.25–2
+    const CROP = 0.12, CROP_MIN = 70;                  // how much of the player to clip off each edge (fraction of height, min px) to hide YouTube's chrome
     const FREEZE_EVERY = 8, GUESS_TIME = 5, REVEAL_TIME = 1700, SPOT_FRAC = 0.07, SPOT_MIN = 44, SCAN_MS = 350, FRAME_MAX_W = 1280;
 
-    const $ = (s) => document.querySelector(s);
     let player, capture, state = 'menu', score = 0, played = 0, walked = 0, lastT = null, found = [];
 
     // ---------- layout: 16:9 letterbox ----------
     function layout() {
       const W = innerWidth, H = innerHeight, s = Math.min(W / 16, H / 9);
       const w = 16 * s, h = 9 * s;
-      Object.assign(document.getElementById('player').style, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px' });
+      Object.assign($('#view').style, { left: (W - w) / 2 + 'px', top: (H - h) / 2 + 'px', width: w + 'px', height: h + 'px' });
+      // scale the player up evenly so a margin of at least CROP_MIN px is clipped off every edge
+      const m = Math.max(CROP * h, CROP_MIN), k = (h + 2 * m) / h, pw = w * k, ph = h * k;
+      Object.assign(document.getElementById('player').style, { left: (w - pw) / 2 + 'px', top: (h - ph) / 2 + 'px', width: pw + 'px', height: ph + 'px' });
     }
+    const $ = (s) => document.querySelector(s);
     addEventListener('resize', layout); layout();
-    const videoRect = () => document.getElementById('player').getBoundingClientRect();
+    const videoRect = () => $('#view').getBoundingClientRect();
 
     // ---------- YouTube player ----------
     const YT_ERRORS = {
@@ -136,7 +143,7 @@
         playerVars: { controls: 0, rel: 0, modestbranding: 1, iv_load_policy: 3, playsinline: 1, disablekb: 1, fs: 0, mute: 1, start: START_AT, origin: location.origin },
         events: {
           // warm up: start playing muted behind the menu so the first seconds are buffered before Start
-          onReady: () => { layout(); player.mute(); player.playVideo(); },
+          onReady: () => { layout(); player.mute(); player.setPlaybackRate(SPEED); player.playVideo(); },
           onStateChange: (e) => {
             if (warming && e.data === YT.PlayerState.PLAYING) {
               warming = false;
@@ -147,6 +154,7 @@
               if (e.data === YT.PlayerState.BUFFERING) setStatus('⏳ buffering…');
               if (e.data === YT.PlayerState.PLAYING) setStatus('walking…');
             }
+            if (e.data === YT.PlayerState.PLAYING && player.getPlaybackRate() !== SPEED) player.setPlaybackRate(SPEED);
           },
           onError: (e) => { warming = false; setBtn('Video unavailable', false); $('#err').textContent = `YouTube error ${e.data}: ${YT_ERRORS[e.data] || 'unknown problem'}.`; },
         },
@@ -203,7 +211,8 @@
     function tick() {
       if (state === 'walking' && player.getPlayerState() === YT.PlayerState.PLAYING) {
         const t = player.getCurrentTime();
-        if (lastT !== null && t > lastT && t - lastT < 1) walked += t - lastT; // count only real playback
+        // count only real playback, in real seconds, so freezes stay every FREEZE_EVERY s at any speed
+        if (lastT !== null && t > lastT && t - lastT < 1) walked += (t - lastT) / (player.getPlaybackRate() || 1);
         lastT = t;
         if (walked >= FREEZE_EVERY) { walked = 0; freeze(); }
       }
