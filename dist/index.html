@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Freeze Feds</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script type="module" crossorigin src="./assets/index-CPZRR3h4.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D6n5hUjx.css">
+</head>
+<body>
+  <!-- 16:9 stage: the street photo with a transparent WebGL canvas on top -->
+  <div id="stage">
+    <img id="bg" src="./street.webp" alt="" draggable="false" />
+    <canvas id="gl"></canvas>
+    <div id="fx"></div>
+    <div id="flash"></div>
+
+    <div id="hud" hidden>
+      <div class="pill" id="timer">⏱ 120</div>
+      <div class="pill" id="caught">❄ Bosses 0 / 10</div>
+      <button class="pill" id="sound" title="Sound">🔊</button>
+    </div>
+
+    <div id="card" hidden>
+      <canvas id="card-pic" width="160" height="160"></canvas>
+      <div id="card-text"></div>
+    </div>
+
+    <div id="debug-info" hidden></div>
+    <div id="parody">Parody · caricatures for satire, not endorsed by anyone depicted</div>
+
+    <div class="screen" id="start-screen">
+      <div class="panel">
+        <h1>❄ The Freeze Feds ❄</h1>
+        <p>Ten tech and finance bosses are loose on California &amp; Powell. Hover over anyone to inspect them, and click a boss to freeze them in ice.</p>
+        <ul>
+          <li>Right catch: <b>+10 s</b></li>
+          <li>Wrong person: <b>−10 s</b></li>
+          <li>Watch how people move. The bosses don't walk like everyone else.</li>
+        </ul>
+        <button class="go" id="start">Start the shift</button>
+      </div>
+    </div>
+
+    <div class="screen" id="over-screen" hidden>
+      <div class="panel">
+        <h1 id="over-title">Time's up!</h1>
+        <p id="over-stats"></p>
+        <button class="go" id="restart">Play again</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
