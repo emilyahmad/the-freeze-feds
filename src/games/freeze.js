@@ -24,7 +24,8 @@ const BLOB_SIZE = [0.22, 0.32];   // finale splats before the last: blob diamete
 const FINALE_START = 0.5, VOLLEY_GAP = [0.55, 0.4], VOLLEY_BREAK = 0.9, FINALE_HOLD = 0.3;
 
 let cam = null, noCam = false;   // one webcam panel for the page; noCam once the camera has failed to start
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _ndc = new THREE.Vector2();
+const TOUCH_SLOP = [12, 24, 36];   // a tap that misses everyone tries rings this far out (px), nearest first: fingers are blunt
 
 export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
   const { crowd, profile, raycaster, ndc, camera, canvas, size } = ctx;
@@ -61,6 +62,19 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
       onCancel: () => { if (checking === a && !deciding) setButton(true); },
       onError: () => { noCam = true; if (checking === a && !deciding) setButton(true); },
     });
+  }
+
+  /** Whoever is nearest a tap that missed: raycast rings of points around it (TOUCH_SLOP). */
+  function pickNear(p) {
+    const { w, h } = size();
+    for (const r of TOUCH_SLOP) for (let i = 0; i < 8; i++) {
+      const t = i / 8 * Math.PI * 2;
+      _ndc.set((p.x + Math.cos(t) * r) / w * 2 - 1, 1 - (p.y + Math.sin(t) * r) / h * 2);
+      raycaster.setFromCamera(_ndc, camera);
+      const a = crowd.pick(raycaster);
+      if (a) return a;
+    }
+    return null;
   }
 
   /** Where the person's head is on screen (stage px). */
@@ -276,7 +290,8 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
     down(pointer) {
       if (!active) return;
       raycaster.setFromCamera(ndc, camera);
-      const a = crowd.pick(raycaster);
+      let a = crowd.pick(raycaster);
+      if (!a && pointer?.touch) a = pickNear(pointer);
       if (checking) {
         if (deciding) return;                                     // a stamp is already coming down
         if (a !== checking) releaseNow(a);   // clicked off them: let them go at once (and check whoever was clicked)

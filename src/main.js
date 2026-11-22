@@ -16,11 +16,24 @@ installWiiCursor();
 // src/games/freeze.js as a mode: update(dt), hover(pointer), down(pointer), stop().
 const params = new URLSearchParams(location.search), debug = params.has('debug');
 const $ = (s) => document.querySelector(s);
+// phones / tablets: no hover, so no look-around drift, a lighter pixel ratio, a little tap slop (freeze.js) and "Tap" wording
+const touch = matchMedia('(pointer: coarse)').matches;
+const upright = matchMedia('(orientation: portrait) and (pointer: coarse)');   // shows #rotate (style.css); the game waits
+if (touch) document.querySelector('#title-how .go-hint').textContent = 'Tap to play!';
+// phones: the first tap goes fullscreen and locks the screen sideways where the browser allows it (Android Chrome);
+// elsewhere (iOS Safari) the rotate prompt is what keeps it landscape
+if (touch) addEventListener('pointerup', async () => {
+  try {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+    await screen.orientation?.lock?.('landscape');
+  } catch { /* not supported: the rotate prompt covers it */ }
+}, { once: true });
 
 // ---- renderer + scene ----
 const stage = $('#stage'), canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.5 : 2));
 renderer.setClearColor(0x000000, 0);
 const scene = new THREE.Scene();
 const camera = setupCamera();
@@ -52,7 +65,11 @@ function layout() {
   $('#photo').style.width = fullW + 'px'; $('#photo').style.height = fullH + 'px';
   applyCrop();
   renderer.setSize(stageW, stageH);
-  stage.style.setProperty('--sw', Math.min(stageW, stageH * IMG_W / IMG_H) + 'px');   // the profile phone scales with the window
+  // the profile phone (and the webcam panel) scale with the window: by its width, capped by its height so the whole
+  // phone plus the Freeze button (~56em) still fits on short screens like a phone held sideways
+  const sw = Math.min(stageW, stageH * IMG_W / IMG_H);
+  stage.style.setProperty('--sw', sw + 'px');
+  stage.style.setProperty('--pf', Math.min(sw * 0.0098, stageH / 56) + 'px');
 }
 function applyCrop() {
   const mx = (fullW - stageW) / 2, my = (fullH - stageH) / 2;
@@ -68,18 +85,19 @@ function updateLook(dt) {
   look.x += dx; look.y += dy; applyCrop();
 }
 addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'touch') return;          // a finger dragging isn't looking around
   look.tx = Math.max(-1, Math.min(1, e.clientX / innerWidth * 2 - 1));
   look.ty = Math.max(-1, Math.min(1, e.clientY / innerHeight * 2 - 1));
 });
 document.documentElement.addEventListener('pointerleave', () => { look.tx = look.ty = 0; });
-addEventListener('resize', layout); layout();
+addEventListener('resize', layout); addEventListener('orientationchange', () => setTimeout(layout, 300)); layout();
 
 // ---- pointer ----
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let pointer = null;            // {x, y} in stage px, or null when off the stage
 function setPointer(e) {
   const r = canvas.getBoundingClientRect();
-  pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
+  pointer = { x: e.clientX - r.left, y: e.clientY - r.top, touch: e.pointerType === 'touch' };
   ndc.set(pointer.x / r.width * 2 - 1, 1 - pointer.y / r.height * 2);
   if (debug) { const d = $('#debug-info'); d.hidden = false; d.textContent = `img px ${Math.round((pointer.x + cropX) / photoScale)}, ${Math.round((pointer.y + cropY) / photoScale)}`; }
 }
@@ -144,7 +162,7 @@ $('#title-start').onclick = () => { sfx.startBeatbox(); $('#title-start').hidden
 $('#title-how').onclick = () => { if (!introBusy) intro(); };
 $('#restart').onclick = startFreeze;
 // browsers only allow audio after a gesture: the first click or key anywhere starts it (and keeps the beatbox going)
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { sfx.unlock(); sfx.startBeatbox(); }, { once: true, capture: true });
+for (const ev of ['pointerdown', 'touchend', 'click', 'keydown']) addEventListener(ev, () => { sfx.unlock(); sfx.startBeatbox(); }, { once: true, capture: true });
 $('#sound').onclick = () => { $('#sound').textContent = sfx.toggleMute() ? '🔇' : '🔊'; };
 sfx.startBeatbox();
 
@@ -193,6 +211,7 @@ if (debug) { window.__game = { crowd, camera, THREE, ctx, get mode() { return mo
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+  if (upright.matches) return;               // phone held upright: everything waits behind the rotate prompt
   updateLook(dt);
   if (!mode?.pauseCrowd) crowd.update(dt);   // the crowd keeps walking behind the menus too
   // background chatter follows how many people are on the street (not still walking in, not frozen; it fades as

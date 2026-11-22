@@ -4,21 +4,21 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; }
 body {
   font-family: Itim, system-ui, sans-serif; color: var(--ink);
   background: linear-gradient(180deg, #36474b 0%, #7db9c9 55%, #96e6fd 100%);
 }
 
 #stage { position: absolute; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }   /* no pinch-zoom / scroll on the street */
 #photo { position: absolute; pointer-events: none; }   /* sized / offset by main.js to cover the window */
 #bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
 #gl.pointing { cursor: crosshair; }
 #gl.on-person { cursor: pointer; }
 
 /* ---- HUD ---- */
-#hud { position: absolute; top: 2.5%; left: 2%; right: 2%; display: flex; gap: 10px; justify-content: center; pointer-events: none; }
+#hud { position: absolute; top: max(2.5%, env(safe-area-inset-top)); left: max(2%, env(safe-area-inset-left)); right: max(2%, env(safe-area-inset-right)); display: flex; gap: 10px; justify-content: center; pointer-events: none; }
 .pill {
   font: inherit; font-size: clamp(14px, 1.6vw, 22px); font-weight: 600; color: var(--ink);
   background: var(--card); border: 3px solid #fff; border-radius: 999px; padding: .25em .9em;
@@ -114,7 +114,7 @@ body {
 @keyframes how-pop { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
 
 /* ---- start / end screens ---- */
-.screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(40, 25, 90, .35); backdrop-filter: blur(2px); z-index: 10; }
+.screen { position: absolute; inset: 0; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); display: flex; align-items: center; justify-content: center; background: rgba(40, 25, 90, .35); backdrop-filter: blur(2px); z-index: 10; }
 .screen[hidden], #hud[hidden], #debug-info[hidden], #profile[hidden] { display: none; }
 .panel {
   max-width: 470px; width: 100%; text-align: center; background: var(--card); border: 3px solid #fff; border-radius: 28px;
@@ -131,10 +131,10 @@ button.go {
 button.go:hover { transform: translateY(-2px) scale(1.03); }
 
 /* ---- ID check: LinkedIn-style profile on a phone (after design-references/linkedin.png) ---- */
-/* sized from --sw (set in main.js: the window width, capped by its height) so it scales with the window */
+/* sized from --pf (set in main.js from the window width and height) so the phone and the Freeze button always fit on screen */
 #profile {
-  position: absolute; left: 3.5%; top: 50%; translate: 0 -50%; width: 24em; z-index: 5; pointer-events: none;
-  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: calc(var(--sw, 1600px) * 0.0098); color: #e9e9ea;
+  position: absolute; left: calc(3.5% + env(safe-area-inset-left)); top: 50%; translate: 0 -50%; width: 24em; z-index: 5; pointer-events: none;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: var(--pf, 15.7px); color: #e9e9ea;
   animation: pp-in .45s cubic-bezier(.2, .9, .3, 1.15);
 }
 #profile.out { animation: pp-out .2s ease-in forwards; }
@@ -245,13 +245,14 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
   background: linear-gradient(180deg, #b9ecff, #4fb3e8); border: .16em solid #fff; border-radius: 999px;
   box-shadow: 0 .22em 0 #2a7fb0, 0 .5em 1em rgba(20, 10, 50, .35); transition: transform .1s, opacity .2s;
 }
-#pf-freeze:hover { transform: translateY(-.1em) scale(1.03); }
+@media (hover: hover) { #pf-freeze:hover { transform: translateY(-.1em) scale(1.03); } }
+#pf-freeze { touch-action: manipulation; }
 #pf-freeze:active { transform: translateY(.12em); box-shadow: 0 .1em 0 #2a7fb0, 0 .3em .6em rgba(20, 10, 50, .35); }
 #pf-freeze:disabled { opacity: 0; pointer-events: none; }
 
 #throwcam {
-  position: absolute; left: calc(3.5% + 27em); top: 50%; translate: 0 -50%; width: 22em; z-index: 6;   /* between the phone and the person at the camera */
-  font: 600 calc(var(--sw, 1600px) * 0.0098) Itim, system-ui, sans-serif; color: var(--ink); text-align: center;
+  position: absolute; left: calc(3.5% + env(safe-area-inset-left) + 27em); top: 50%; translate: 0 -50%; width: 22em; z-index: 6;   /* between the phone and the person at the camera */
+  font: 600 var(--pf, 15.7px) Itim, system-ui, sans-serif; color: var(--ink); text-align: center;
   background: var(--card); border: .25em solid #fff; border-radius: 1.8em; padding: .8em;
   box-shadow: 0 1em 2.4em var(--plum); animation: tc-in .35s cubic-bezier(.2, .9, .3, 1.2);
 }
@@ -324,3 +325,35 @@ html.wii-cursor, html.wii-cursor * { cursor: none !important; }
 #over-screen button.go:hover { transform: none; scale: 1.06; }
 #over-screen button.go:active { scale: .96; animation: none; box-shadow: 0 .04em 0 #1478ad; }
 @keyframes over-bob { 50% { translate: 0 -.08em; } }
+#over-screen .panel { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+/* short screens (phones on their side): a tighter end panel */
+@media (max-height: 500px) {
+  #over-screen .panel { padding: 12px 18px; border-radius: 20px; max-width: min(540px, 80vw); }
+  #over-screen h1 { font-size: clamp(26px, 9vh, 40px); }
+  #over-screen p { font-size: 14px; margin-bottom: 6px; }
+  #over-screen button.go { font-size: 22px; }
+  .pill { font-size: 13px; border-width: 2px; }
+}
+/* touch: no hover states to get stuck on after a tap */
+@media (hover: none) {
+  #title-start:hover, #title-how:hover .go-hint, #over-screen button.go:hover { scale: 1; }
+}
+
+/* ---- portrait phones: ask to turn sideways (main.js pauses the game while this shows) ---- */
+#rotate { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  #rotate {
+    position: fixed; inset: 0; z-index: 20000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+    padding: 24px; text-align: center; background: linear-gradient(180deg, #36474b 0%, #7db9c9 55%, #96e6fd 100%);
+    font: 700 clamp(22px, 6.5vw, 30px) Itim, system-ui, sans-serif; color: #f6fbff;
+    -webkit-text-stroke: .14em #123c5e; paint-order: stroke fill; text-shadow: 0 .08em 0 #123c5e;
+  }
+  #rotate p { margin: 0; max-width: 14em; }
+  .rot-phone {
+    width: 64px; height: 112px; border: 6px solid #fff; border-radius: 14px; position: relative;
+    background: linear-gradient(180deg, #bff3ff 0%, #4ec8f3 42%, #1aa0df 100%);
+    box-shadow: 0 6px 0 #123c5e; animation: rot-turn 2.2s ease-in-out infinite;
+  }
+  .rot-phone i { position: absolute; left: 50%; bottom: 6px; width: 18px; height: 4px; margin-left: -9px; border-radius: 4px; background: #fff; }
+}
+@keyframes rot-turn { 0%, 25% { rotate: 0deg; } 55%, 85% { rotate: -90deg; } 100% { rotate: 0deg; } }
