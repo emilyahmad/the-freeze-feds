@@ -5,6 +5,16 @@ const CARD_LAYER = 1;         // the person being checked is put on this layer s
 const PHOTO_HEADS = 1.9;      // profile photo frame height, in head heights (smaller = tighter on the face)
 const PHOTO_DROP = 0.08;      // how far below the eyes the photo is aimed, as a fraction of the frame (head sits a bit high, like a headshot)
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
+const PHOTO_BG_L = 0.82;       // headshot backdrop lightness: a pale tint of the top they're wearing
+const PHOTO_BG_S = 0.55;       // ...with its saturation capped so bright tops still give a soft pastel
+
+/** Headshot backdrop: a lighter shade of the top the Mii is wearing (vest, else jacket, else shirt). */
+function photoBg(look = {}) {
+  const top = look.outfit === 'vest' ? look.vest : look.jacket || look.shirt;
+  const c = new THREE.Color(top || '#e9e5f2'), hsl = {};
+  c.getHSL(hsl, THREE.SRGBColorSpace);
+  return c.setHSL(hsl.h, Math.min(hsl.s, PHOTO_BG_S), PHOTO_BG_L, THREE.SRGBColorSpace);
+}
 
 // ---- HUD, popups and screens ----
 export const hud = {
@@ -79,6 +89,60 @@ export function snowBack(from, { text = '', onImpact, onDone } = {}) {
       { transform: 'translateY(125%) scale(1)', offset: 1 },
     ], { duration: total, fill: 'forwards' }).onfinish = () => { splat.remove(); onDone?.(); };
   };
+}
+
+/** End of a lost round: a boss's snowball flies out of the street from `from` (stage px), growing as it comes at the
+ *  screen, and splats as a lumpy splotch (`size` vmin across) stuck on the glass at `to`, dripping a little.
+ *  It stays until clearSplots(). onImpact() fires on the splat. */
+const SPLOT_FLY = 0.55;
+export function snowSplot(from, to, { size = 26, onImpact } = {}) {
+  const stage = $('#stage'), w = stage.clientWidth, h = stage.clientHeight, px = size / 100 * Math.min(w, h);
+  const ball = Object.assign(document.createElement('div'), { className: 'snowball back' });
+  stage.appendChild(ball);
+  const s0 = 0.12, s1 = px / 64 * 0.55, frames = [];        // same perspective rush as snowBack
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16, depth = 1 - t * (1 - s0 / s1), k = (s0 / depth - s0) / (s1 - s0);
+    frames.push({ transform: `translate(${from.x + (to.x - from.x) * k}px, ${from.y + (to.y - from.y) * k - Math.sin(k * Math.PI) * h * 0.08}px) scale(${s0 / depth}) rotate(${-t * 300}deg)` });
+  }
+  ball.animate(frames, { duration: SPLOT_FLY * 1000, easing: 'linear', fill: 'forwards' }).onfinish = () => {
+    if (!ball.isConnected) return;                           // cleared mid-flight (round restarted)
+    ball.remove();
+    const el = Object.assign(document.createElement('div'), { className: 'splot' });
+    el.style.cssText = `left:${to.x}px;top:${to.y}px;width:${px}px;height:${px}px;rotate:${Math.random() * 360}deg`;
+    const blob = (cls, css) => el.appendChild(Object.assign(document.createElement('span'), { className: cls })).style.cssText = css;
+    blob('splot-core', '');
+    for (let i = 0, n = 8 + Math.floor(Math.random() * 4); i < n; i++) {   // lumpy rim
+      const a = (i + Math.random() * 0.6) / n * Math.PI * 2, r = 26 + Math.random() * 14, s = 22 + Math.random() * 22;
+      blob('splot-lump', `width:${s}%;height:${s}%;left:${50 + Math.cos(a) * r}%;top:${50 + Math.sin(a) * r}%`);
+    }
+    for (let i = 0; i < 5; i++) {                                         // flecks flung past the rim
+      const a = Math.random() * Math.PI * 2, r = 55 + Math.random() * 20, s = 5 + Math.random() * 7;
+      blob('splot-lump', `width:${s}%;height:${s}%;left:${50 + Math.cos(a) * r}%;top:${50 + Math.sin(a) * r}%`);
+    }
+    // drips run down the glass (in screen space, so they sit in an unrotated layer)
+    const drips = el.appendChild(Object.assign(document.createElement('div'), { className: 'splot-drips' }));
+    drips.style.rotate = `${-parseFloat(el.style.rotate)}deg`;
+    for (let i = 0, n = 2 + Math.floor(Math.random() * 2); i < n; i++) {
+      const d = drips.appendChild(Object.assign(document.createElement('span'), { className: 'splot-drip' }));
+      d.style.cssText = `left:${25 + Math.random() * 50}%;width:${7 + Math.random() * 6}%;--len:${0.5 + Math.random() * 0.7};animation-delay:${0.3 + Math.random() * 0.6}s`;
+    }
+    stage.appendChild(el);
+    el.animate([{ scale: 0.35, opacity: 0.7 }, { scale: 1.12, opacity: 1, offset: 0.55 }, { scale: 1 }],
+      { duration: 220, easing: 'cubic-bezier(.2, .8, .3, 1)' });
+    stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
+    onImpact?.();
+  };
+}
+
+/** Slide every stuck splotch off the bottom of the screen (or drop them at once with `now`). */
+export function clearSplots(now = false) {
+  for (const el of document.querySelectorAll('.splot, .snowball.back')) {
+    if (now || !el.classList.contains('splot')) { el.remove(); continue; }
+    const d = 0.9 + Math.random() * 0.6, h = $('#stage').clientHeight;
+    const y = parseFloat(el.style.top);                     // (top, not transform: the splotch is rotated)
+    el.animate([{ top: `${y}px` }, { top: `${y + h * 1.3}px` }],
+      { duration: d * 1000, delay: Math.random() * 250, easing: 'cubic-bezier(.55, 0, .85, .4)', fill: 'forwards' }).onfinish = () => el.remove();
+  }
 }
 
 export function wrongFlash() {
@@ -314,7 +378,8 @@ export class Profile {
     this.scroller.scrollTop = 0;
     this.tick();
     this.stampEl.className = ''; this.stampEl.replaceChildren();
-    this.photoCtx.fillStyle = '#e9e5f2'; this.photoCtx.fillRect(0, 0, this.W, this.H);
+    this.bg = photoBg(agent.person.userData.look);
+    this.photoCtx.fillStyle = `#${this.bg.getHexString()}`; this.photoCtx.fillRect(0, 0, this.W, this.H);
     this.el.classList.remove('out'); this.el.hidden = false;
     void this.el.offsetWidth;                       // restart the slide-in animation
   }
@@ -342,7 +407,7 @@ export class Profile {
     this.cam.lookAt(aim);
     a.person.traverse((o) => o.layers.enable(CARD_LAYER));
     const r = this.renderer, prevAlpha = r.getClearAlpha(), prevColor = r.getClearColor(new THREE.Color());
-    r.setRenderTarget(this.rt); r.setClearColor(0xe9e5f2, 1); r.clear(); r.render(this.scene, this.cam);
+    r.setRenderTarget(this.rt); r.setClearColor(this.bg, 1); r.clear(); r.render(this.scene, this.cam);
     r.readRenderTargetPixels(this.rt, 0, 0, this.W, this.H, this.pixels);
     r.setRenderTarget(null); r.setClearColor(prevColor, prevAlpha);
     a.person.traverse((o) => o.layers.disable(CARD_LAYER));

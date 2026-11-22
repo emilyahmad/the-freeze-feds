@@ -41,7 +41,7 @@ const profile = new Profile(renderer, scene);
 const LOOK_OVERSCAN = 1.05;   // extra photo scale that gives the crop room to drift
 const LOOK_EASE = 3;          // how quickly the view follows the cursor (1/s)
 let stageW = 0, stageH = 0, photoScale = 1, cropX = 0, cropY = 0, fullW = 0, fullH = 0;
-let lookOn = false;          // held still on the title screen; the street starts drifting once a round begins
+let lookOn = false;          // held still on the title screen and during the intro zoom; drifts once the round begins
 const look = { x: 0, y: 0, tx: 0, ty: 0 };   // current and target, −1..1 across the stage
 function layout() {
   stageW = innerWidth; stageH = innerHeight;
@@ -102,14 +102,16 @@ const ctx = {
 // the crossing signal shows WALK during a round and turns back to the red hand when it ends
 const signal = createSignal();
 function startFreeze() {
-  $('#title-screen').hidden = true; lookOn = true;
+  $('#title-screen').hidden = true; lookOn = true; introBusy = false;
   showScreen(null); signal.walk();
-  const m = createFreeze(ctx, { onDone: (r) => { overScreen(r); } });
+  const m = createFreeze(ctx, {
+    onEnd: () => { hud.show(false); signal.stop({ blink: true }); },   // the moment the round ends (before any finale)
+    onDone: (r) => { overScreen(r); },
+  });
   ctx.setMode(m);
   if (debug) window.__game.freeze = m;
 }
 function overScreen(r) {
-  hud.show(false); signal.stop({ blink: true });
   $('#over-title').textContent = r.won ? 'All CEOs frozen! ❄' : "Time's up!";
   const list = (as) => as.map((a) => a.name).join(', ');
   const stats = $('#over-stats'); stats.replaceChildren();
@@ -122,14 +124,52 @@ function overScreen(r) {
 
 // START swaps the button for the how-to, still on the title art; clicking that starts the round on the street.
 $('#title-start').onclick = () => { sfx.startBeatbox(); $('#title-start').hidden = true; $('#title-how').hidden = false; };
-$('#title-how').onclick = startFreeze;
+$('#title-how').onclick = () => { if (!introBusy) intro(); };
 $('#restart').onclick = startFreeze;
 // browsers only allow audio after a gesture: the first click or key anywhere starts it (and keeps the beatbox going)
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { sfx.unlock(); sfx.startBeatbox(); }, { once: true, capture: true });
 $('#sound').onclick = () => { $('#sound').textContent = sfx.toggleMute() ? '🔇' : '🔊'; };
 sfx.startBeatbox();
 
-// ?debug skips the title screen; window.__game is for tuning from the console
+// Intro (after the how-to click): the empty street with the steady orange hand; the photo zooms in on the crossing
+// signal, it turns to WALK and starts ticking, the view zooms back out and the crowd floods in (the round starts).
+// ?debug skips it. The crowd only spawns once the round starts (crowd.reset() in the round).
+const INTRO = { wait: 0.8, zoomIn: 1.6, red: 0.9, walk: 1.2, zoomOut: 1.4, beat: 0.3 };   // seconds, in order
+const INTRO_ZOOM = 3;                    // how far the photo zooms in on the signal
+let introBusy = false;
+const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+/** Zoom the photo so the signal's face is centred at `zoom`× (clamped so the photo still covers the stage). */
+function signalZoom(zoom) {
+  const photo = $('#photo'), pr = photo.getBoundingClientRect(), sr = $('#ws-face').getBoundingClientRect();
+  const lx = sr.left + sr.width / 2 - pr.left, ly = sr.top + sr.height / 2 - pr.top;   // signal centre, in photo px
+  const left = -cropX, top = -cropY, fullW = pr.width, fullH = pr.height;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const tx = clamp(stageW / 2 - left - zoom * lx, stageW - left - zoom * fullW, -left);
+  const ty = clamp(stageH / 2 - top - zoom * ly, stageH - top - zoom * fullH, -top);
+  return `translate(${tx}px, ${ty}px) scale(${zoom})`;
+}
+function zoomPhoto(from, to, secs) {
+  const anim = $('#photo').animate([{ transform: from }, { transform: to }],
+    { duration: secs * 1000, easing: 'cubic-bezier(.45, 0, .25, 1)', fill: 'forwards' });
+  return anim.finished.then(() => anim);
+}
+async function intro() {
+  introBusy = true;
+  $('#title-screen').hidden = true; signal.stop();
+  sfx.unlock();                                    // the click that got here counts as the gesture, so the tick can play
+  $('#photo').style.transformOrigin = '0 0';
+  await sleep(INTRO.wait);
+  const close = signalZoom(INTRO_ZOOM);
+  await zoomPhoto('none', close, INTRO.zoomIn);
+  await sleep(INTRO.red);
+  signal.walk();                                   // WALK man + the ticking
+  await sleep(INTRO.walk);
+  (await zoomPhoto(close, 'none', INTRO.zoomOut)).cancel();   // back to normal; drop the animation so layout() owns the photo again
+  await sleep(INTRO.beat);
+  startFreeze();
+}
+
+// ?debug skips the title screen and the intro; window.__game is for tuning from the console
 if (debug) { window.__game = { crowd, camera, THREE, ctx, get mode() { return mode; } }; startFreeze(); }
 
 // ---- loop ----

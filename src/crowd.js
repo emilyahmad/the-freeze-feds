@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { resetProfileDeck } from './ui.js';
-import { makePerson, randomLook, ceoLook, assistantLook, describe, pose, encase, resetFaceDeck, CEO_TYPES, HIGHLIGHT } from './characters.js';
+import { makePerson, randomLook, ceoLook, assistantLook, describe, pose, encase, resetFaceDeck, CEO_TYPES, HIGHLIGHT, THROW_RELEASE } from './characters.js';
 
 export const NORMALS = 20;
 const WALK_SPEED = 0.75, SPEED_WALKER = 1.45, PACE_SPEED = 0.42, LEAD_SPEED = 0.6, SLOW_SPEED = 0.32, LOITER_SPEED = 0.5;
@@ -44,6 +44,12 @@ const ENTER_MARGIN = [0.6, 2.5], ENTER_SPREAD = 4, ENTER_SPEEDUP = 1.3;
 // exit: when a round ends everyone still walking around heads briskly off the nearer side of the photo
 // (EXIT_MARGIN m past the edge), setting off within EXIT_SPREAD s of each other, and is removed once there
 const EXIT_SPEED = 2.2, EXIT_MARGIN = 1.5, EXIT_SPREAD = 0.6, EXIT_GIVEUP = 12;   // GIVEUP: removed after this long regardless (s)
+// finale: when time runs out, the bosses who got away don't leave: they hurry (LINE_SPEED) to a line across the far
+// crosswalk (centred on image pixel LINE_X, LINE_Y; LINE_GAP m apart), face the camera and throw snowballs at the
+// screen (throwSnowball: THROW_TIME s each, the ball leaves the hand at THROW_RELEASE, then a smug laugh).
+// LINE_GIVEUP: anyone not there after this long stops where they are, so the line can't stall.
+const LINE_X = 836, LINE_Y = 425, LINE_GAP = 1.05, LINE_SPEED = 2.4, LINE_GIVEUP = 9;
+const THROW_TIME = 1.05, THROW_WIND = 0.12, THROW_TWIST = 0.35;   // WIND: lean back on the windup (rad), TWIST: shoulder turn
 // hover: like Find Mii (design-references/hover-on-mii.png), the person under the cursor gets a big head (scaled
 // HOVER_HEAD× from the neck, eased at HOVER_HEAD_RATE /s) and turns it to look at the camera (up to HOVER_NECK rad
 // off their heading, eased at HOVER_TURN_RATE /s) while they keep walking; their hitbox grows HOVER_HIT× taller
@@ -63,7 +69,7 @@ export class Crowd {
 
   reset() {
     for (const a of this.agents) this.scene.remove(a.person);
-    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.hovered = null; resetFaceDeck(); resetProfileDeck();
+    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.hovered = null; this.lineup = null; resetFaceDeck(); resetProfileDeck();
     for (let i = 0; i < NORMALS; i++) this.spawn(randomLook(), 'wander', false, true);
     for (const type of CEO_TYPES) {
       const ceo = this.spawn(ceoLook(type), type.behavior, true, true);
@@ -80,10 +86,10 @@ export class Crowd {
     this.total = this.agents.length;
   }
 
-  /** Round over: everyone not frozen walks quickly off the nearer side of the photo and is then removed. */
-  exit() {
+  /** Round over: everyone not frozen (or in `keep`) walks quickly off the nearer side of the photo and is then removed. */
+  exit(keep = []) {
     for (const a of this.agents) {
-      if (a.frozen) continue;
+      if (a.frozen || keep.includes(a)) continue;
       if (a.group) this.leaveChat(a, false);
       a.inspect = null; a.onPresent = null; a.returning = false; a.entering = false; a.hurryT = 0;
       a.pause = 0; a.pitchT = 0; a.stuckT = 0;
@@ -92,6 +98,52 @@ export class Crowd {
       a.target = this.area.offscreen(p, p.x < 0 ? -1 : 1, EXIT_MARGIN);
       const i = this.hitboxes.indexOf(a.person.userData.hitbox); if (i >= 0) this.hitboxes.splice(i, 1);
     }
+  }
+
+  /** Time's up: the bosses who got away line up across the far crosswalk facing the camera; onLined() once they're all there. */
+  lineUp(bosses, onLined) {
+    const c = this.area.at(LINE_X, LINE_Y), n = bosses.length;
+    const order = [...bosses].sort((a, b) => a.person.position.x - b.person.position.x);   // keep left-to-right order: nobody crosses
+    order.forEach((a, i) => {
+      if (a.group) this.leaveChat(a, false);
+      Object.assign(a, { inspect: null, onPresent: null, returning: false, entering: false, hurryT: 0, pause: 0, pitchT: 0, stuckT: 0, lookAt: null });
+      a.finale = 'walk'; a.lineT = 0; a.throwT = null;
+      a.target = new THREE.Vector3(c.x + (i - (n - 1) / 2) * LINE_GAP, 0, c.z);
+      const h = this.hitboxes.indexOf(a.person.userData.hitbox); if (h >= 0) this.hitboxes.splice(h, 1);
+    });
+    this.lineup = { members: order, onLined };
+  }
+
+  finaleStep(a, dt) {
+    const p = a.person.position;
+    if (a.finale === 'walk') {
+      a.lineT += dt;
+      if (this.move(a, LINE_SPEED, dt) || a.lineT > LINE_GIVEUP || (a.stuckT > STUCK_TIME && p.distanceTo(a.target) < 0.8)) a.finale = 'stand';
+      return;
+    }
+    a.speedNow = 0;
+    a.heading = angleLerp(a.heading, Math.atan2(-p.x, -p.z), dt * 6);        // face the camera (at the origin)
+    this.throwStep(a, dt);
+  }
+
+  /** Advance a snowball throw at the camera (throwSnowball), if one is under way. */
+  throwStep(a, dt) {
+    if (a.throwT == null) { a.fx.throw = -1; return; }
+    const was = a.throwT; a.throwT += dt;
+    if (was < THROW_RELEASE * THROW_TIME && a.throwT >= THROW_RELEASE * THROW_TIME) {   // let go
+      a.person.userData.snowball.visible = false;
+      const cb = a.onRelease; a.onRelease = null; cb?.(a);
+    }
+    if (a.throwT >= THROW_TIME) { a.throwT = null; a.fx.throw = -1; a.laughT = rand(0.9, 1.4); return; }   // ha!
+    a.fx.throw = a.throwT / THROW_TIME;
+  }
+
+  /** Someone facing the camera (lined up at the end, or an innocent up for an ID check who just got hit) throws a
+   *  snowball at the screen; onRelease(a) fires as it leaves their hand. */
+  throwSnowball(a, onRelease) {
+    if (!a.finale && a.inspect !== 'present') return;
+    a.throwT = 0; a.onRelease = onRelease; a.laughT = 0; a.flinchT = 0; a.braceK = 0;
+    a.person.userData.snowball.visible = true;
   }
 
   exitStep(a, dt) {
@@ -358,7 +410,7 @@ export class Crowd {
       let rel = Math.atan2(q.x - p.x, q.z - p.z) - a.heading;
       rel = Math.atan2(Math.sin(rel), Math.cos(rel));
       yaw = Math.max(-1, Math.min(1, rel));
-    } else if (!(a.speedNow > 0.1)) {
+    } else if (!(a.speedNow > 0.1) && !a.finale) {                          // (lined up at the end: eyes on the camera)
       if ((a.idleLookT -= dt) <= 0) { a.idleLookT = rand(1.2, 3.5); a.idleYaw = Math.random() < 0.35 ? 0 : rand(-0.8, 0.8); }
       yaw = a.idleYaw;
     }
@@ -379,6 +431,7 @@ export class Crowd {
       a.mode = 'walk'; a.px = person.position.x; a.pz = person.position.z;
       if (a.hurryT > 0) a.hurryT -= dt;
       if (a.leaving) this.exitStep(a, dt);
+      else if (a.finale) this.finaleStep(a, dt);
       else if (a.inspect) this.inspectStep(a, dt);
       else if (a.entering && a.behavior !== 'follow') this.enterStep(a, dt);
       else if (a.group) this.chat(a, dt);
@@ -433,7 +486,13 @@ export class Crowd {
       person.rotation.y = a.heading;
       pose(person, a.phase, a.amp, a.mode, this.time, a.fx);
       const body = person.userData.rig.body;
-      body.rotation.x = 0;
+      body.rotation.x = 0; body.rotation.y = 0;
+      if (a.fx.throw >= 0) {                   // throwing: lean back and turn the throwing shoulder away, then lunge forward
+        const p = a.fx.throw, r = THROW_RELEASE, w = p < r ? Math.sin(p / r * Math.PI / 2) : Math.cos((p - r) / (1 - r) * Math.PI / 2);
+        const fwd = p < r ? 0 : Math.sin((p - r) / (1 - r) * Math.PI);
+        body.rotation.x += -THROW_WIND * (p < r ? w : 0) + 0.18 * fwd;
+        body.rotation.y += p < r ? -THROW_TWIST * w : THROW_TWIST * 0.7 * fwd;
+      }
       if (a.bumpT > 0) {                       // bumped: lean away from the push, then wobble back upright
         a.bumpT = Math.max(0, a.bumpT - dt);
         const e = a.bumpT / BUMP_TIME, k = BUMP_LEAN * a.bumpAmt * e * Math.cos((1 - e) * Math.PI * 3);
@@ -447,6 +506,9 @@ export class Crowd {
       if (a.shakeT > 0) { a.shakeT -= dt; body.rotation.z += Math.sin(this.time * 60) * 0.18 * (a.shakeT / 0.4); }
     }
     this.collide();
+    if (this.lineup?.onLined && this.lineup.members.every((a) => a.finale === 'stand')) {   // all in line: let the throwing begin
+      const cb = this.lineup.onLined; this.lineup.onLined = null; cb();
+    }
     if (this.agents.some((a) => a.left)) {                               // walked off the photo at the end of a round
       for (const a of this.agents) if (a.left) this.scene.remove(a.person);
       this.agents = this.agents.filter((a) => !a.left);
@@ -488,17 +550,19 @@ export class Crowd {
     }
     a.speedNow = 0;
     a.heading = angleLerp(a.heading, Math.atan2(-p.x, -p.z), dt * 6);        // face the camera (at the origin)
+    this.throwStep(a, dt);                                                     // throwing back at the player
   }
 
   /** Let them go: they walk back to where they were picked from and carry on. */
   release(a) {
     a.inspect = null; a.onPresent = null; a.returning = true; a.stuckT = 0;
+    if (a.throwT != null) { a.throwT = null; a.fx.throw = -1; a.onRelease = null; a.person.userData.snowball.visible = false; }   // cut short
     a.hurryT = RELEASE_HURRY;                                            // hurry back out of the way
     a.target = a.behavior === 'pace' ? a.paceA : a.home.clone();
     a.socialCd = Math.max(a.socialCd, 4);
   }
 
-  /** The player's punch is nearly there: `a` cowers by k (0..1). Keep calling while it changes; it relaxes once it stops. */
+  /** The player's throw is nearly there: `a` cowers by k (0..1). Keep calling while it changes; it relaxes once it stops. */
   brace(a, k) { a.braceK = k; a.braceAt = this.time; }
 
   /** The snowball is in the air: `a` cowers fully for `time` s, and people nearby flinch too (less, the further away). */

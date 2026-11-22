@@ -70,6 +70,8 @@ export function buildWalkArea(camera) {
   const distToEdge = (p) => nearestOnEdge(p).d;
   return {
     ground, contains,
+    /** Image pixel (original IMG_W × IMG_H photo) → point on the ground. */
+    at(px, py) { return imgToGround(camera, px, py); },
     /** Pull a point that has been pushed outside back onto the edge (in place). */
     clamp(p) { if (!inPoly(poly, p.x, p.z)) { const e = nearestOnEdge(p); p.x = e.x; p.z = e.z; } return p; },
     /** Random spot, spread over the IMAGE (not the ground) and biased toward its bottom (NEAR_BIAS), so the

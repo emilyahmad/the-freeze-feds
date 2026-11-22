@@ -144,6 +144,7 @@ function gpuTextures() {
   };
 }
 const canGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.13, 14);
+const snowballGeo = new THREE.SphereGeometry(0.06, 14, 10), snowballMat = new THREE.MeshPhongMaterial({ color: 0xf6fbff, shininess: 30, specular: 0x334455 });
 const cardboardGeo = new THREE.BoxGeometry(0.36, 0.26, 0.28);
 const tapeGeo = new THREE.BoxGeometry(0.37, 0.27, 0.06);
 const shadowGeo = new THREE.CircleGeometry(0.3, 24).rotateX(-Math.PI / 2);
@@ -383,6 +384,9 @@ export function makePerson(look) {
     part(G.strip, mat('#76b900'), phone, [0.02, 0.001, -GPU_W / 2 + 0.001], 0);             // green accent along the top edge
   }
   if (look.carry === 'soda') phone = part(canGeo, mat('#c8202c'), handR, [0, -0.06, 0.07]);
+  // a snowball in the left hand, shown only while winding up the end-of-round throw (crowd.js throwSnowball)
+  const snowball = part(snowballGeo, snowballMat, handL, [0, -0.08, 0.03], 0);
+  snowball.visible = false;
   // two-hand props, held in front of the body
   let twoHand = false;
   if (look.carry === 'box') {
@@ -395,15 +399,19 @@ export function makePerson(look) {
   const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.position.y = 0.01; shadow.renderOrder = -1; root.add(shadow);
   const hitbox = new THREE.Mesh(hitGeo, hitMat); root.add(hitbox);
 
-  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand, headFrame: hf, eyeY: ey };
+  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand, snowball, headFrame: hf, eyeY: ey };
   return root;
 }
 
+// end-of-round snowball throw (fx.throw: 0..1 through the throw, < 0 or unset = not throwing); the ball leaves the
+// hand THROW_RELEASE of the way through
+export const THROW_RELEASE = 0.55;
 const qUpL = new THREE.Quaternion(), qUpR = new THREE.Quaternion(), qLoL = new THREE.Quaternion(), qLoR = new THREE.Quaternion();
 /**
  * Pose for one frame.
  * phase: walk-cycle phase · amp: 0 (standing) … 1 (full stride)
  * mode: 'walk' | 'phone' (head down, as if reading) | 'pitch' (both arms waving)
+ * fx.throw (0..1, see THROW_RELEASE) winds up and throws with the left arm.
  * fx.flinch (0..1) cowers over everything else: forearms up in front of the face, head ducked and turned away, knees bent.
  * Arm angles are for an arm hanging straight down: x swings it forward (−) / back (+), z lifts it
  * outward (− on the left arm, + on the right). Each arm has an upper (u) and a forearm (f) angle.
@@ -449,6 +457,17 @@ export function pose(person, phase, amp, mode, t, fx) {
       body.position.y += Math.abs(Math.sin(t * 15)) * 0.03 * fx.laugh;
       if (!person.userData.twoHand) mix(L, { ux: -0.4, uz: -0.05, fx: -1.5, fz: 0.5 }, fx.laugh);
     }
+  }
+  if (fx && fx.throw >= 0) {                         // overhand throw with the left hand: wind up behind the head, whip, ease back
+    const p = fx.throw, r = THROW_RELEASE, a0 = r - 0.14, a1 = r + 0.08;
+    const sm = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+    const WIND = { ux: 0.55, uz: -2.1, fx: 0.9, fz: -2.9 }, FOLLOW = { ux: -1.45, uz: -0.15, fx: -1.15, fz: 0.25 };
+    let to = WIND, k = 1;
+    if (p < a0) k = sm(p / a0);
+    else if (p < a1) { const q = sm((p - a0) / (a1 - a0)); to = {}; for (const key in WIND) to[key] = WIND[key] + (FOLLOW[key] - WIND[key]) * q; }
+    else { to = FOLLOW; k = 1 - sm((p - a1) / (1 - a1)); }
+    for (const key in to) L[key] += (to[key] - L[key]) * k;
+    if (p < a0) hx -= 0.12 * k;                      // chin up while winding up
   }
   let turn = 0;
   if (fx && fx.flinch > 0.01) {                      // cower: shield the face with both forearms, duck, turn away
