@@ -9,6 +9,19 @@ import { mergeVertices, deinterleaveGeometry } from 'three/addons/utils/BufferGe
 // two hats. Heads/hair/hats face −X and sit with their base on the neck, in metres.
 
 const MODELS = './models/';
+// Base Mii, after design-references/fixed_mii.glb: the head sits HEAD_LIFT above the neck bone, so a short
+// neck shows above the collar instead of the head swallowing it
+const HEAD_LIFT = 0.056;
+// The ripped hairstyles lost the Mii's per-head hair placement, so many sit too tight and the scalp pokes
+// through (a pink bald spot). HAIR_HEAD_LIFT raises hair on the taller head shapes; HAIR_FIT grows a
+// hairstyle about HAIR_PIVOT (mid-head, in head-model space) just enough to clear every head. Measured by
+// raycasting each hair against each head, then checked by eye.
+const HAIR_HEAD_LIFT = { 'head-03': 0.03, 'head-07': 0.03, 'head-08': 0.03 };
+const HAIR_FIT = {
+  'hair-05': 1.05, 'hair-07': 1.075, 'hair-09': 1.05, 'hair-10': 1.03, 'hair-11': 1.035, 'hair-21': 1.05,
+  'hair-25': 1.045, 'hair-26': 1.05, 'hair-28': 1.065, 'hair-29': 1.045, 'hair-31': 1.05, 'hair-59': 1.045, 'hair-61': 1.02, 'hair-60': 1.035,
+};
+const HAIR_PIVOT = [0.04, 0.38];   // x (forward), y (up)
 const assets = {};
 
 // shirt triangles are split into torso / sleeves / hands, pants into legs / shoes, so each part can
@@ -18,19 +31,23 @@ export const SHIRT_PARTS = ['torso', 'sleeve', 'hand'], PANTS_PARTS = ['legs', '
 export async function loadMiiModels() {
   const loader = new GLTFLoader();
   const load = (f) => loader.loadAsync(MODELS + f);
-  const [male, female, heads, hair, hats] = await Promise.all([
+  const [male, female, heads, hair, hairDefault, hats] = await Promise.all([
     load('character-bodies/body-male.glb'), load('character-bodies/body-female.glb'),
-    load('character-heads/heads.glb'), load('character-hair/hair-styles.glb'), load('character-hair/hats.glb'),
+    load('character-heads/heads.glb'), load('character-hair/hair-styles.glb'),
+    load('character-hair/hair-default.glb'),        // the fitted default Mii hair from design-references/fixed_mii.glb
+    load('character-hair/hats.glb'),
   ]);
   assets.bodies = { male: prepBody(male.scene), female: prepBody(female.scene) };
   // the ripped meshes are flat-shaded; Miis are smooth, so weld vertices and recompute soft normals
   const meshes = (scene) => { const out = {}; scene.traverse((o) => { if (o.isMesh) { o.geometry = smooth(o.geometry); out[o.name] = o; } }); return out; };
   assets.heads = meshes(heads.scene);
   assets.hair = meshes(hair.scene);
+  assets.hair['hair-default'] = Object.values(meshes(hairDefault.scene))[0];
   hats.scene.traverse((o) => { if (o.isMesh) o.geometry = smooth(o.geometry, true); });
   assets.hats = { cap: hats.scene.getObjectByName('cap'), beanie: hats.scene.getObjectByName('beanie') };
   assets.boneCtl = boneControls(assets.bodies.male);
   for (const name of Object.keys(assets.heads)) assets.heads[name].userData.face = faceAnchor(assets.heads[name].geometry);
+  await loadFaces();
 }
 
 function smooth(geo, keepUV = false) {
@@ -150,7 +167,116 @@ function faceAnchor(geo) {
   const earY = EYE_Y - 0.04;
   const side = cast(new THREE.Vector3(2, earY, -0.02), new THREE.Vector3(-1, 0, 0))?.x ?? 0.28;
   const decal = new DecalGeometry(m, new THREE.Vector3(0, EYE_Y - 0.08, front), new THREE.Euler(), new THREE.Vector3(FACE_W, FACE_W, 0.5));
-  return { front, decal, ear: [side - 0.012, earY, -0.02] };
+  const photoDecal = new DecalGeometry(m, new THREE.Vector3(0, PHOTO_CY, front), new THREE.Euler(), new THREE.Vector3(PHOTO_W, PHOTO_H, 0.6));
+  return { front, decal, photoDecal, ear: [side - 0.012, earY, -0.02] };
+}
+
+// ---- photo faces: real photos wrapped onto the front of the head instead of the drawn Mii face ----
+// Images live in design-references/tech-faces/ and are picked up automatically. Bosses are matched by the
+// table below (CEO_TYPES id → file, with hand-measured eye centres and chin in that image's pixels, so every
+// photo lands with its eyes on the Mii eye line however it was framed). Anything in tech-faces/crowd/ goes
+// into a pool for the crowd (optional f-/m- filename prefix sets their gender), using default framing.
+// Anyone without a photo keeps the drawn Mii face.
+const FACE_FILES = import.meta.glob('../design-references/{tech-faces,remaining-faces}/**/*.{jpeg,jpg,png,webp}', { eager: true, query: '?url', import: 'default' });
+const PHOTO_FACES = {
+  holmes: { file: 'elizabeth-holmes', eyes: [[420, 490], [780, 490]], chin: [600, 1080] },
+  zuckerberg: { file: 'mark-zuckerberg', eyes: [[240, 130], [305, 130]], chin: [272, 255] },
+  huang: { file: 'jensen-huang', eyes: [[175, 200], [275, 200]], chin: [225, 350], glasses: true },
+  thiel: { file: 'peter-thiel', eyes: [[255, 220], [380, 235]], chin: [315, 470] },
+  karp: { file: 'alex-karp', eyes: [[515, 600], [815, 605]], chin: [665, 1140], glasses: true },
+  gates: { file: 'bill-gates', eyes: [[240, 255], [365, 250]], chin: [300, 440], glasses: true },
+  bezos: { file: 'jeff-bezos', eyes: [[480, 385], [690, 375]], chin: [580, 690] },
+  dimon: { file: 'jamie-dimon', eyes: [[148, 163], [218, 160]], chin: [185, 290] },
+  buffett: { file: 'warren-buffet', eyes: [[400, 222], [815, 215]], chin: [600, 950], glasses: true },
+};
+// crowd photos in design-references/remaining-faces/ (aligned portraits: eyes ≈ y 480, chin ≈ y 900–960);
+// what each person's Mii looks like to match their photo is in CROWD_LOOKS (src/characters.js)
+const CROWD_FACES = {
+  rando: { eyes: [[380, 485], [640, 485]], chin: [510, 900] },
+  rando1: { eyes: [[395, 480], [640, 470]], chin: [520, 950] },
+  rando2: { eyes: [[380, 485], [640, 485]], chin: [510, 880] },
+  rando3: { eyes: [[375, 485], [640, 485]], chin: [510, 930] },
+  rando4: { eyes: [[385, 483], [645, 483]], chin: [510, 925] },
+  rando5: { eyes: [[385, 480], [640, 480]], chin: [510, 915] },
+  rando6: { eyes: [[380, 478], [635, 478]], chin: [520, 960] },
+  rando7: { eyes: [[378, 482], [640, 482]], chin: [510, 920] },
+  rando8: { eyes: [[385, 478], [645, 478]], chin: [505, 930], glasses: true },
+  rando9: { eyes: [[385, 483], [640, 478]], chin: [505, 935], glasses: true },
+};
+// the photo decal on the head (head-frame metres) and where the photo's eyes / chin land on it
+const PHOTO_W = 0.48, PHOTO_H = 0.56, PHOTO_CY = 0.22, EYE_TO_CHIN = 0.29, PPM = 1000;
+// visible oval (brow to chin), feathered into the Mii skin
+const PHOTO_OVAL = { cy: 0.24, rx: 0.185, ry: 0.225, feather: 0.25 };
+
+/** Loaded photo faces: { boss: { [ceoId]: face }, crowd: [face] }, face = { texture, skin, glasses, gender, file } */
+export const faces = { boss: {}, crowd: [] };
+
+async function loadFaces() {
+  const byName = {};
+  for (const [path, url] of Object.entries(FACE_FILES)) byName[path.split('/').pop().replace(/\.\w+$/, '')] = { path, url };
+  const jobs = [];
+  for (const [id, spec] of Object.entries(PHOTO_FACES)) {
+    const f = byName[spec.file]; if (!f) continue;
+    jobs.push(photoFace(f.url, spec).then((face) => { faces.boss[id] = { ...face, file: spec.file }; }));
+    f.used = true;
+  }
+  for (const [name, f] of Object.entries(byName)) {
+    if (f.used || !(f.path.includes('/crowd/') || f.path.includes('/remaining-faces/'))) continue;
+    const gender = /^f-/i.test(name) ? 'female' : /^m-/i.test(name) ? 'male' : null;
+    jobs.push(photoFace(f.url, CROWD_FACES[name] || {}).then((face) => faces.crowd.push({ ...face, gender, file: name })));
+  }
+  await Promise.all(jobs);
+}
+
+/** The photo with its own borders faded out, so a tightly cropped picture (e.g. cut off at the brow) blends
+ *  into the head instead of ending in a hard line. */
+function softEdges(img, w, h) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), f = Math.min(w, h) * 0.07;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'destination-in';
+  for (const [x0, y0, x1, y1] of [[0, 0, w, 0], [0, 0, 0, h]]) {          // horizontal, then vertical fade
+    const len = x1 + y1, grad = g.createLinearGradient(0, 0, x1, y1);
+    grad.addColorStop(0, 'rgba(0,0,0,0)'); grad.addColorStop(f / len, 'rgba(0,0,0,1)');
+    grad.addColorStop(1 - f / len, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  }
+  return c;
+}
+
+/** Fit a photo to the face decal by its eyes and chin, mask it to a feathered oval, and sample the skin tone. */
+async function photoFace(url, spec) {
+  const img = new Image(); img.src = url; await img.decode();
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const [l, r] = spec.eyes || [[w * 0.4, h * 0.42], [w * 0.6, h * 0.42]], chin = spec.chin || [w * 0.5, h * 0.78];
+  const W = Math.round(PHOTO_W * PPM), H = Math.round(PHOTO_H * PPM);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const top = PHOTO_CY + PHOTO_H / 2, toPx = (y) => (top - y) * PPM;   // head-frame y (m) → canvas y (px)
+  const mid = [(l[0] + r[0]) / 2, (l[1] + r[1]) / 2], roll = Math.atan2(r[1] - l[1], r[0] - l[0]);
+  const scale = EYE_TO_CHIN * PPM / Math.hypot(chin[0] - mid[0], chin[1] - mid[1]);
+  g.translate(W / 2, toPx(EYE_Y)); g.rotate(-roll); g.scale(scale, scale); g.translate(-mid[0], -mid[1]);
+  g.drawImage(softEdges(img, w, h), 0, 0);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  // skin tone: the inner face (between the eyes and the chin), ignoring dark pixels (eyes, brows, stubble,
+  // shadow) by averaging the 50th–90th percentile of brightness, which reads as the face's overall tone
+  const fx0 = Math.round(W / 2 - 0.1 * PPM), fy0 = Math.round(toPx(EYE_Y - 0.03)), fw = Math.round(0.2 * PPM), fh = Math.round(0.17 * PPM);
+  const px = g.getImageData(fx0, fy0, fw, fh).data, cols = [];
+  for (let i = 0; i < px.length; i += 16) if (px[i + 3] > 200) cols.push([px[i], px[i + 1], px[i + 2], px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11]);
+  cols.sort((a, b) => a[3] - b[3]);
+  const band = cols.slice(Math.floor(cols.length * 0.5), Math.floor(cols.length * 0.9));
+  const avg = (k) => Math.round(band.reduce((t, c) => t + c[k], 0) / band.length);
+  const skin = band.length ? `rgb(${avg(0)},${avg(1)},${avg(2)})` : null;
+  // feathered oval mask
+  const o = PHOTO_OVAL, ocx = W / 2, ocy = toPx(o.cy);
+  g.globalCompositeOperation = 'destination-in';
+  g.translate(ocx, ocy); g.scale(1, o.ry / o.rx);
+  const rad = o.rx * PPM, grad = g.createRadialGradient(0, 0, rad * (1 - o.feather), 0, 0, rad);
+  grad.addColorStop(0, 'rgba(0,0,0,1)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad; g.fillRect(-rad, -rad, rad * 2, rad * 2);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over';
+  const texture = new THREE.CanvasTexture(c); texture.colorSpace = THREE.SRGBColorSpace; texture.anisotropy = 8;
+  return { texture, skin, glasses: !!spec.glasses };
 }
 
 export const EYE_COLORS = ['#2b1d14', '#5a3a22', '#3a6ea5', '#4a7a4a', '#6a6a72'];
@@ -256,10 +382,18 @@ function faceTexture(f) {
   g.strokeStyle = 'rgba(95,40,25,.65)'; g.lineWidth = 3.5;
   for (const sd of [-1, 1]) { g.beginPath(); g.arc(cx + sd * nw * 0.55, ny, nw * 0.42, sd > 0 ? -P * 0.35 : P * 0.6, sd > 0 ? P * 0.4 : P * 1.35); g.stroke(); }
 
-  // moustache (over the top lip)
+  // moustache (over the top lip); a goatee brings its own moustache plus a patch on the chin
   const my = ey + M(0.135), mw = M(f.mouthW || 0.045);
-  if (f.moustache) {
-    g.fillStyle = f.moustache;
+  const tache = f.moustache || f.goatee;
+  if (f.goatee) {
+    g.fillStyle = f.goatee;
+    g.beginPath(); g.moveTo(cx - mw * 0.75, my + M(0.022));
+    g.quadraticCurveTo(cx - mw * 0.8, my + M(0.07), cx, my + M(0.078));
+    g.quadraticCurveTo(cx + mw * 0.8, my + M(0.07), cx + mw * 0.75, my + M(0.022));
+    g.quadraticCurveTo(cx, my + M(0.034), cx - mw * 0.75, my + M(0.022)); g.fill();
+  }
+  if (tache) {
+    g.fillStyle = tache;
     g.beginPath(); g.moveTo(cx, my - M(0.028));
     g.bezierCurveTo(cx + mw * 0.7, my - M(0.04), cx + mw * 1.3, my - M(0.02), cx + mw * 1.25, my - M(0.0));
     g.bezierCurveTo(cx + mw * 0.8, my - M(0.012), cx + mw * 0.3, my - M(0.014), cx, my - M(0.012));
@@ -303,7 +437,7 @@ const earGeo = new THREE.SphereGeometry(1, 16, 12).scale(0.024, 0.05, 0.036);
  * Build one Mii: body (cloned skinned rig), head, face, hair or hat.
  * Returns the model plus the bones and frames that characters.js hangs accessories on.
  */
-export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat = null, hatColor, face, mat, outlineMat, outlineHeadMat, colors }) {
+export function buildMii({ gender = 'male', head = 'head-01', headWidth = 1, hair = null, hat = null, hatColor, face, photo = null, mat, outlineMat, outlineHeadMat, colors }) {
   const model = SkeletonUtils.clone(assets.bodies[gender]);
   const bone = (n) => model.getObjectByName(n);
   const parts = {};
@@ -319,7 +453,8 @@ export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat =
   });
 
   // head frame: character axes in metres, origin at the neck, turning with the head bone
-  const headFrame = frameOn(bone('head'));
+  const headFrame = new THREE.Group(); headFrame.position.y = HEAD_LIFT; headFrame.scale.x = headWidth;   // headWidth > 1 = broad face
+  frameOn(bone('head')).add(headFrame);
   const headSrc = assets.heads[head] || assets.heads['head-01'];
   const headMesh = new THREE.Mesh(headSrc.geometry, parts.skin = mat(colors.skin, 'skin'));
   headMesh.rotation.y = Math.PI / 2; headFrame.add(headMesh);
@@ -329,12 +464,21 @@ export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat =
     ear.add(new THREE.Mesh(earGeo, outlineHeadMat)); headFrame.add(ear);
   }
   headMesh.add(new THREE.Mesh(headSrc.geometry, outlineHeadMat));
-  const faceMesh = new THREE.Mesh(headSrc.userData.face.decal, faceTexture(face));
+  let faceMesh;
+  if (photo) {                                     // photo face; its material goes through mat() so freezing tints it
+    const pm = mat('#ffffff', 'skin');
+    Object.assign(pm, { map: photo.texture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+    faceMesh = new THREE.Mesh(headSrc.userData.face.photoDecal, pm);
+  } else faceMesh = new THREE.Mesh(headSrc.userData.face.decal, faceTexture(face));
   faceMesh.renderOrder = 1; headFrame.add(faceMesh);
 
   if (hair && !hat && assets.hair[hair]) {
     const h = new THREE.Mesh(assets.hair[hair].geometry, parts.hair = mat(colors.hair, 'hair'));
-    parts.hair.side = THREE.DoubleSide; h.rotation.y = Math.PI / 2; headFrame.add(h);
+    parts.hair.side = THREE.DoubleSide; h.rotation.y = Math.PI / 2;
+    const k = HAIR_FIT[hair] ?? 1, [px, py] = HAIR_PIVOT;
+    h.scale.setScalar(k);   // grow about the pivot (head-model +x is the frame's −z after the turn), then lift
+    h.position.set(0, py * (1 - k) + (HAIR_HEAD_LIFT[head] ?? 0), -px * (1 - k));
+    headFrame.add(h);
   }
   if (hat) {
     const h = assets.hats[hat].clone(); h.rotation.y = Math.PI / 2;

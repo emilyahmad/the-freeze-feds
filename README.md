@@ -1,9 +1,9 @@
 # The Freeze Feds 🧊
 
-A crowd of chibi people strolls around California & Powell. Ten tech and finance bosses are hiding among them. Hover over anyone to inspect them, and click a boss to freeze them in ice.
+A crowd of chibi people strolls around California & Powell. Nine tech and finance bosses are hiding among them. Hover over anyone to inspect them, and click a boss to freeze them in ice.
 
 - The round lasts **120 s**. A right catch adds **+10 s** and a wrong one costs **−10 s**.
-- The round ends when time runs out or when all ten bosses are frozen.
+- The round ends when time runs out or when all nine bosses are frozen.
 - The bosses are parody caricatures, recognisable by their signature look **and** by how they move:
 
 | Boss | Look | Moves |
@@ -11,7 +11,6 @@ A crowd of chibi people strolls around California & Powell. Ten tech and finance
 | Elizabeth Holmes | black turtleneck, blonde bun, wide eyes, tiny blood-test gadget | paces, staring down |
 | Mark Zuckerberg | grey tee, curly hair, VR headset | speed-walks |
 | Jensen Huang | black leather jacket, silver hair, graphics chip | stops to pitch at people |
-| Elon Musk | black tee, carrying a kitchen sink | speed-walks |
 | Peter Thiel | navy suit, open collar, receding hairline | loiters and watches |
 | Alex Karp | wild grey curls, bright scarf | stops to pitch at people |
 | Bill Gates | V-neck sweater over a collar, round glasses | paces, staring down |

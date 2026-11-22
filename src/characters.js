@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { buildMii, setBone, setChildBone, armRot, frameOn, outlineMaterial, EYE_COLORS, FACE_SCALE } from './mii.js';
+import { buildMii, setBone, setChildBone, armRot, frameOn, outlineMaterial, EYE_COLORS, FACE_SCALE, faces } from './mii.js';
 
 // Mii-style people built from the GLB parts in public/models (see src/mii.js): a skinned body, one of
 // 8 head shapes with ears and a drawn-on Mii face, one of 68 hairstyles or a hat. Soft glossy shading
@@ -23,26 +23,24 @@ const colorName = (hex, list = [...SHIRTS, ...CEO_COLORS]) => (list.find(([h]) =
 // Built from signature looks only (hair, outfit, a prop) on the generic chibi face.
 // `info` is the hover-card line; `behavior` is their movement tell (see crowd.js).
 export const CEO_TYPES = [
-  { id: 'holmes', name: 'Elizabeth Holmes', behavior: 'pace', info: 'Black turtleneck, blonde hair pulled back, wide unblinking blue eyes, tiny blood-test gadget',
-    look: { skin: '#f6dcc8', hair: '#d9c28c', hairStyle: 'bun', outfit: 'turtleneck', shirt: '#17171b', pants: '#17171b', bigEyes: true, carry: 'device' } },
-  { id: 'zuckerberg', name: 'Mark Zuckerberg', behavior: 'speed', info: 'Heather-blue tee, short cropped curls, VR headset on',
-    look: { skin: '#f3d3bc', hair: '#5a3b26', hairStyle: 'curly', shirt: '#4a5d93', pants: '#2f3e5c', headset: true } },
-  { id: 'huang', name: 'Jensen Huang', behavior: 'pitch', info: 'Black leather jacket, swept silver hair, rectangular glasses, waving a graphics chip',
-    look: { skin: '#e6bf98', hair: '#b9bbc2', hairStyle: 'swept', shirt: '#141418', jacket: '#141418', pants: '#141418', glasses: 'square', glassesColor: '#2a2a30', carry: 'gpu' } },
-  { id: 'musk', name: 'Elon Musk', behavior: 'speed', info: 'Dark blazer, open white collar, messy hair, carrying a kitchen sink',
-    look: { skin: '#f2d0b8', hair: '#3e2a1e', hairStyle: 'short', shirt: '#f2f2f2', jacket: '#1d1f26', pants: '#22222a', collar: '#f4f4f4', carry: 'sink' } },
-  { id: 'thiel', name: 'Peter Thiel', behavior: 'loiter', info: 'Charcoal suit, white shirt, blue tie, close-cropped hair',
-    look: { skin: '#f3d6c2', hair: '#9a8468', hairStyle: 'short', outfit: 'suit', shirt: '#33363e', pants: '#33363e', collar: '#ffffff', tie: '#2c4a9a' } },
-  { id: 'karp', name: 'Alex Karp', behavior: 'pitch', info: 'Wild grey curls, round glasses, black zip-up over a white collar',
-    look: { skin: '#e2b894', hair: '#8b8478', hairStyle: 'puff', shirt: '#ffffff', jacket: '#1e1e22', pants: '#22304a', collar: '#f4f4f4', glasses: 'round', glassesColor: '#4a4a50' } },
-  { id: 'gates', name: 'Bill Gates', behavior: 'pace', info: 'Navy sweater over a collared shirt, rectangular glasses',
-    look: { skin: '#f3d0bc', hair: '#a9a49a', hairStyle: 'short', outfit: 'sweater', shirt: '#242b44', pants: '#6b5b45', collar: '#d6e4f2', glasses: 'square', glassesColor: '#2c2c34' } },
-  { id: 'bezos', name: 'Jeff Bezos', behavior: 'lead', info: 'Shiny bald head, big grin, grey blazer over a light blue shirt, carrying a cardboard box',
-    look: { skin: '#efc6a6', hair: '#efc6a6', hairStyle: 'bald', shirt: '#a9c8ea', jacket: '#555a63', pants: '#2f3e5c', collar: '#b4d0ee', carry: 'box' } },
-  { id: 'dimon', name: 'Jamie Dimon', behavior: 'lead', info: 'Silver swept-back hair, broad grin, navy suit, white shirt, striped tie',
-    look: { skin: '#eec4a6', hair: '#dcdde2', hairStyle: 'swept', outfit: 'suit', shirt: '#1e2944', pants: '#1e2944', collar: '#ffffff', tie: '#5b6d8e' } },
-  { id: 'buffett', name: 'Warren Buffett', behavior: 'slow', info: 'White hair, bushy eyebrows, big glasses, navy suit, can of soda',
-    look: { skin: '#f2cdb8', hair: '#f2f2f4', hairStyle: 'short', outfit: 'suit', shirt: '#26304a', pants: '#26304a', collar: '#ffffff', tie: null, glasses: 'round', glassesColor: '#6a5848', brows: '#f2f2f4', carry: 'soda' } },
+  { id: 'holmes', name: 'Elizabeth Holmes', behavior: 'pace', info: 'Black turtleneck, long blonde hair pulled back, pale, wide unblinking eyes, tiny blood-test gadget',
+    look: { skin: '#f9e4d6', hair: '#dcc48e', hairStyle: 'long', outfit: 'turtleneck', shirt: '#17171b', pants: '#17171b', bigEyes: true, carry: 'device' } },
+  { id: 'zuckerberg', name: 'Mark Zuckerberg', behavior: 'speed', info: 'Plain tee, short brown hair, youthful face, VR headset on',
+    look: { skin: '#f3d3bc', hair: '#5a3b26', hairStyle: 'short', shirt: '#4a5d93', pants: '#2f3e5c', headset: true } },
+  { id: 'huang', name: 'Jensen Huang', behavior: 'pitch', info: 'Black leather jacket, short grey-black hair, glasses, waving a graphics chip',
+    look: { skin: '#e6bf98', hair: '#5f5f66', hairStyle: 'swept', shirt: '#141418', jacket: '#141418', pants: '#141418', glasses: 'square', glassesColor: '#2a2a30', carry: 'gpu' } },
+  { id: 'thiel', name: 'Peter Thiel', behavior: 'loiter', info: 'Short brown-grey hair, round face, charcoal suit and tie',
+    look: { skin: '#f3d6c2', hair: '#6e6258', hairStyle: 'short', outfit: 'suit', shirt: '#33363e', pants: '#33363e', collar: '#ffffff', tie: '#2c4a9a' } },
+  { id: 'karp', name: 'Alex Karp', behavior: 'pitch', info: 'Balding, stubbly beard, olive military-style jacket',
+    look: { skin: '#ecc9a8', hair: '#7a7268', hairStyle: 'receding', shirt: '#2a2a2e', jacket: '#59613f', pants: '#3a3d30' } },
+  { id: 'gates', name: 'Bill Gates', behavior: 'pace', info: 'Grey-white hair, glasses, navy sweater over a collared shirt',
+    look: { skin: '#f3d0bc', hair: '#c4c0b8', hairStyle: 'short', outfit: 'sweater', shirt: '#242b44', pants: '#6b5b45', collar: '#d6e4f2', glasses: 'square', glassesColor: '#2c2c34' } },
+  { id: 'bezos', name: 'Jeff Bezos', behavior: 'lead', info: 'Shiny bald head, bushy eyebrows, trimmed goatee, fitted grey jacket, carrying a cardboard box',
+    look: { skin: '#efc6a6', hair: '#3a2a20', hairStyle: 'bald', brows: '#3a2a20', shirt: '#a9c8ea', jacket: '#555a63', pants: '#2f3e5c', collar: '#b4d0ee', carry: 'box' } },
+  { id: 'dimon', name: 'Jamie Dimon', behavior: 'lead', info: 'Short grey hair, broad face, dark suit and tie',
+    look: { skin: '#eec4a6', hair: '#c9cacf', hairStyle: 'short', outfit: 'suit', shirt: '#1e2944', pants: '#1e2944', collar: '#ffffff', tie: '#5b6d8e' } },
+  { id: 'buffett', name: 'Warren Buffett', behavior: 'slow', info: 'White hair, glasses, older face, navy suit and red tie, can of soda',
+    look: { skin: '#f2cdb8', hair: '#f2f2f4', hairStyle: 'short', outfit: 'suit', shirt: '#26304a', pants: '#26304a', collar: '#ffffff', tie: '#9a2b2b', glasses: 'round', glassesColor: '#6a5848', brows: '#f2f2f4', carry: 'soda' } },
 ];
 
 // ---- shared geometry ----
@@ -51,21 +49,20 @@ export const CEO_TYPES = [
 // Mii parts per boss, designed from reference photos (be-elsa/design-references/tech-people-references.png):
 // head shape, hairstyle (public/models/character-hair), and face (eye shape and colour, nose, mouth, extras)
 const CEO_MII = {
-  holmes: { gender: 'female', head: 'head-02', hairModel: 'hair-61', face: { eyes: 'round', eyeColor: '#3f73b0', lashes: true, mouth: 'flat', lips: '#b5504a', nose: 'small', mouthW: 0.038 } },
-  zuckerberg: { head: 'head-05', hairModel: 'hair-13', face: { eyes: 'mii', eyeColor: '#5d7fa8', mouth: 'flat', nose: 'mid', mouthW: 0.04 } },
-  huang: { head: 'head-04', hairModel: 'hair-11', face: { eyes: 'happy', mouth: 'open', nose: 'big', mouthW: 0.048 } },
-  musk: { head: 'head-08', hairModel: 'hair-25', face: { eyes: 'mii', eyeColor: '#6f8a7a', mouth: 'smile', nose: 'mid', browTilt: 0.4, mouthW: 0.046 } },
-  thiel: { head: 'head-03', hairModel: 'hair-31', face: { eyes: 'mii', eyeColor: '#5d86b3', mouth: 'flat', nose: 'long', mouthW: 0.04 } },
-  karp: { head: 'head-06', hairModel: 'hair-27', face: { eyes: 'mii', eyeColor: '#5a3a22', mouth: 'smirk', nose: 'long', stubble: true, mouthW: 0.04 } },
+  holmes: { gender: 'female', head: 'head-02', hairModel: 'hair-60', face: { eyes: 'round', eyeColor: '#3f73b0', lashes: true, mouth: 'flat', lips: '#b5504a', nose: 'small', mouthW: 0.038 } },
+  zuckerberg: { head: 'head-05', hairModel: 'hair-default', face: { eyes: 'mii', eyeColor: '#5d7fa8', mouth: 'flat', nose: 'small', mouthW: 0.04, blush: true } },
+  huang: { head: 'head-04', hairModel: 'hair-11', face: { eyes: 'narrow', eyeColor: '#2b1d14', mouth: 'open', nose: 'mid', mouthW: 0.048 } },
+  thiel: { head: 'head-06', hairModel: 'hair-31', face: { eyes: 'mii', eyeColor: '#5d86b3', mouth: 'flat', nose: 'small', mouthW: 0.04 } },
+  karp: { head: 'head-03', hairModel: 'hair-32', face: { eyes: 'round', eyeColor: '#5a3a22', mouth: 'smirk', nose: 'big', beard: '#6a6258', mouthW: 0.042 } },
   gates: { head: 'head-01', hairModel: 'hair-21', face: { eyes: 'narrow', eyeColor: '#5d86b3', mouth: 'open', nose: 'mid', wrinkles: true, mouthW: 0.048 } },
-  bezos: { head: 'head-07', hairModel: null, face: { eyes: 'narrow', eyeColor: '#3a2a20', mouth: 'open', nose: 'big', browTilt: -0.4, mouthW: 0.05 } },
-  dimon: { head: 'head-03', hairModel: 'hair-06', face: { eyes: 'narrow', eyeColor: '#4f7fb8', mouth: 'open', nose: 'big', wrinkles: true, mouthW: 0.052 } },
+  bezos: { head: 'head-07', hairModel: null, face: { eyes: 'mii', eyeColor: '#3a2a20', mouth: 'open', nose: 'big', bushy: true, browTilt: 0.3, goatee: '#4a3a2e', mouthW: 0.05 } },
+  dimon: { head: 'head-04', headWidth: 1.12, hairModel: 'hair-28', face: { eyes: 'narrow', eyeColor: '#4f7fb8', mouth: 'open', nose: 'big', wrinkles: true, mouthW: 0.052 } },
   buffett: { head: 'head-01', hairModel: 'hair-29', face: { eyes: 'happy', mouth: 'smile', nose: 'big', bushy: true, wrinkles: true, mouthW: 0.044 } },
 };
 
 // hairstyles for everyone else, by style
 const HAIR_STYLES = {
-  short: ['hair-01', 'hair-02', 'hair-04', 'hair-05', 'hair-12', 'hair-15', 'hair-16', 'hair-17', 'hair-18', 'hair-21', 'hair-24', 'hair-28', 'hair-31', 'hair-10', 'hair-26', 'hair-39'],
+  short: ['hair-default', 'hair-default', 'hair-default', 'hair-01', 'hair-02', 'hair-04', 'hair-05', 'hair-12', 'hair-15', 'hair-16', 'hair-17', 'hair-18', 'hair-21', 'hair-24', 'hair-28', 'hair-31', 'hair-10', 'hair-26', 'hair-39'],
   long: ['hair-34', 'hair-37', 'hair-42', 'hair-44', 'hair-45', 'hair-46', 'hair-49', 'hair-50', 'hair-53', 'hair-56', 'hair-58', 'hair-66'],
   bun: ['hair-61', 'hair-62', 'hair-59', 'hair-40', 'hair-60', 'hair-63'],
 };
@@ -99,15 +96,12 @@ const barGeo = new THREE.BoxGeometry(0.05, 0.007, 0.006);
 const phoneGeo = new THREE.BoxGeometry(0.085, 0.15, 0.018);
 const budGeo = new THREE.SphereGeometry(0.035, 8, 6);
 const neckGeo = new THREE.CylinderGeometry(0.085, 0.1, 0.1, 18);
-const hoodGeo = new THREE.TorusGeometry(0.12, 0.055, 8, 20);
 const cordGeo = new THREE.TorusGeometry(0.11, 0.009, 6, 24);
 const badgeGeo = new THREE.BoxGeometry(0.08, 0.1, 0.012);
 const tieGeo = new THREE.BoxGeometry(0.045, 0.2, 0.02);
 // open shirt collar: two pointed flaps in a V, plus a sliver of shirt showing between them
 const collarFlapGeo = (() => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(0.058, 0.012); s.lineTo(0.05, 0.05); s.lineTo(0.006, 0.03); s.closePath(); return new THREE.ExtrudeGeometry(s, { depth: 0.008, bevelEnabled: false }); })();
 const collarVGeo = (() => { const s = new THREE.Shape(); s.moveTo(-0.045, 0.045); s.lineTo(0.045, 0.045); s.lineTo(0, -0.04); s.closePath(); return new THREE.ShapeGeometry(s); })();
-const bagGeo = new THREE.BoxGeometry(0.24, 0.27, 0.07);
-const strapGeo = new THREE.TorusGeometry(0.22, 0.01, 6, 24, Math.PI);
 const headsetGeo = new THREE.BoxGeometry(0.4, 0.15, 0.14);
 const headStrapGeo = new THREE.TorusGeometry(0.3, 0.022, 6, 28);
 const scarfGeo = new THREE.TorusGeometry(0.1, 0.05, 8, 20);
@@ -115,9 +109,6 @@ const scarfTailGeo = new THREE.BoxGeometry(0.08, 0.24, 0.035);
 const deviceGeo = new THREE.BoxGeometry(0.1, 0.07, 0.1);
 const gpuGeo = new THREE.BoxGeometry(0.26, 0.04, 0.14);
 const canGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.13, 14);
-const sinkGeo = new THREE.BoxGeometry(0.44, 0.15, 0.32);
-const basinGeo = new THREE.BoxGeometry(0.34, 0.02, 0.22);
-const tapGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.14, 8);
 const cardboardGeo = new THREE.BoxGeometry(0.36, 0.26, 0.28);
 const tapeGeo = new THREE.BoxGeometry(0.37, 0.27, 0.06);
 const shadowGeo = new THREE.CircleGeometry(0.3, 24).rotateX(-Math.PI / 2);
@@ -137,7 +128,7 @@ const iceLineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: t
 
 export const OUTLINE = 0x2a2142, HIGHLIGHT = 0x5fe0ff;
 
-/** Random everyday look. Some normals share single items with CEOs (phone, hoodie, vest, black shirt) as decoys. */
+/** Random everyday look. Some normals share single items with CEOs (phone, vest, black shirt) as decoys. */
 export function randomLook() {
   const [shirt] = pick(SHIRTS);
   const look = {
@@ -147,17 +138,62 @@ export function randomLook() {
   look.gender = look.hairStyle === 'long' || look.hairStyle === 'bun' ? (chance(0.8) ? 'female' : 'male') : (chance(0.15) ? 'female' : 'male');
   look.face = randomFace(look);
   look.hairModel = look.hairStyle === 'bald' ? null : pick(HAIR_STYLES[look.hairStyle]);
-  if (chance(0.12)) look.outfit = 'hoodie';
-  else if (chance(0.08)) { look.outfit = 'vest'; look.vest = pick(ACCENTS)[0]; }
+  if (chance(0.08)) { look.outfit = 'vest'; look.vest = pick(ACCENTS)[0]; }
   if (chance(0.3)) { look.hat = pick(['beanie', 'cap']); look.hatColor = pick(ACCENTS)[0]; }
   if (chance(0.3)) look.glasses = pick(['round', 'square', 'square', 'sun']);
-  if (chance(0.3)) { look.bag = pick(ACCENTS)[0]; }
   if (chance(0.25)) look.phone = true;
+  takeCrowdFace(look);                           // last, so a crowd photo's matching look wins
   return look;
 }
-export const ceoLook = (type) => ({ ...type.look, ...CEO_MII[type.id], info: type.info, name: type.name });
-export const assistantLook = () => ({ skin: pick(SKINS), hair: pick(HAIRS), hairStyle: 'short', hairModel: pick(HAIR_STYLES.short), head: pick(HEADS),
-  face: { eyes: 'narrow', mouth: 'flat', nose: 'mid' }, pants: '#1c1c22', shirt: '#26262e', outfit: 'assistant', glasses: 'sun', earbuds: true });
+export function ceoLook(type) {
+  const look = { ...type.look, ...CEO_MII[type.id], info: type.info, name: type.name, ceoId: type.id };
+  usePhoto(look, faces.boss[type.id]);
+  return look;
+}
+export function assistantLook() {
+  const look = { skin: pick(SKINS), hair: pick(HAIRS), hairStyle: 'short', hairModel: pick(HAIR_STYLES.short), head: pick(HEADS),
+    face: { eyes: 'narrow', mouth: 'flat', nose: 'mid' }, pants: '#1c1c22', shirt: '#26262e', outfit: 'assistant', glasses: 'sun', earbuds: true };
+  return look;
+}
+
+// ---- photo faces (src/mii.js loads them from design-references/tech-faces/) ----
+/** Give a look a photo face: its skin is tinted to match the photo, and 3D glasses are dropped when the photo has some. */
+function usePhoto(look, photo) {
+  if (!photo) return;
+  look.photo = photo;
+  if (photo.skin) look.skin = photo.skin;
+  if (photo.glasses) delete look.glasses;
+  if (photo.gender) look.gender = photo.gender;
+  const match = CROWD_LOOKS[photo.file];
+  if (match) {                                   // a crowd photo: dress the Mii to match the person in it
+    const { info, ...rest } = match;
+    delete look.hat; delete look.glasses; delete look.vest; look.outfit = null;   // the photo decides hair / glasses
+    Object.assign(look, rest);
+    look.info = info + (look.phone ? ', phone in hand' : '');
+  }
+}
+
+// What each crowd photo's Mii looks like (design-references/remaining-faces/), matched to the photo:
+// gender, hair model + colour, clothes, and a smaller body for the kids. `info` is the hover-card line.
+const CROWD_LOOKS = {
+  rando: { gender: 'female', hairModel: 'hair-22', hair: '#c9a86a', shirt: '#7a5a9a', pants: '#3b3b46', scale: 0.8, info: 'Purple jacket, shaggy blonde hair' },
+  rando1: { gender: 'male', hairModel: 'hair-21', hair: '#1c1410', jacket: '#262b38', shirt: '#e9e2d4', collar: '#e9e2d4', pants: '#2f3e5c', info: 'Navy jacket, slicked-back black hair, stubble' },
+  rando2: { gender: 'female', hairModel: 'hair-49', hair: '#b39a72', shirt: '#ececee', pants: '#4a6a9a', scale: 0.85, info: 'White tee, long dirty-blonde hair' },
+  rando3: { gender: 'female', hairModel: 'hair-46', hair: '#b5804c', shirt: '#e8786a', pants: '#2f3e5c', info: 'Coral top, long wavy strawberry-blonde hair' },
+  rando4: { gender: 'female', hairModel: 'hair-42', hair: '#7a4122', shirt: '#e6b9b4', pants: '#3b3b3b', info: 'Pink top, shoulder-length auburn hair, hoop earrings' },
+  rando5: { gender: 'male', hairModel: 'hair-12', hair: '#2a1d16', shirt: '#e2ddd2', pants: '#4a5d3a', info: 'Cream sweater, messy dark hair' },
+  rando6: { gender: 'male', hairModel: 'hair-13', hair: '#4a3424', shirt: '#1f2a40', pants: '#6b5b45', info: 'Navy polo, curly brown hair, beard' },
+  rando7: { gender: 'female', hairModel: 'hair-50', hair: '#46301f', shirt: '#a8c6df', pants: '#22304a', info: 'Light blue top, brown bob with bangs' },
+  rando8: { gender: 'female', hairModel: 'hair-35', hair: '#8d867c', shirt: '#4069a0', pants: '#3b3b3b', info: 'Blue shirt, short grey hair, glasses' },
+  rando9: { gender: 'female', hairModel: 'hair-60', hair: '#5a3a26', shirt: '#3a3338', pants: '#22304a', info: 'Dark top, brown hair pulled back, glasses' },
+};
+// the crowd draws photos from a shuffled deck (no repeats in a round); once it runs out, people keep Mii faces
+let faceDeck = [];
+export function resetFaceDeck() {
+  faceDeck = [...faces.crowd];
+  for (let i = faceDeck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [faceDeck[i], faceDeck[j]] = [faceDeck[j], faceDeck[i]]; }
+}
+function takeCrowdFace(look) { usePhoto(look, faceDeck.pop()); }
 
 /** One-line description for the hover card. */
 export function describe(look) {
@@ -167,7 +203,6 @@ export function describe(look) {
   if (look.outfit === 'turtleneck') bits.push('Black turtleneck');
   else if (look.outfit === 'suit') bits.push('Sharp suit, red tie');
   else if (look.outfit === 'assistant') bits.push('Dark suit, earpiece');
-  else if (look.outfit === 'hoodie') bits.push(`${shirtName || 'Grey'} hoodie`.trim());
   else if (look.outfit === 'vest') bits.push(`Fleece vest over a ${(shirtName || 'light').toLowerCase()} shirt`);
   else bits.push(`${shirtName} shirt`);
   if (look.lanyard) bits.push('conference lanyard');
@@ -175,7 +210,6 @@ export function describe(look) {
   if (look.glasses === 'round') bits.push('round glasses');
   if (look.glasses === 'square') bits.push('glasses');
   if (look.glasses === 'sun' && look.outfit !== 'assistant') bits.push('sunglasses');
-  if (look.bag) bits.push(`${colorName(look.bag, ACCENTS)} tote bag`);
   if (look.phone) bits.push('phone in hand');
   if (look.earbuds && look.outfit !== 'assistant') bits.push('earbuds in');
   return bits.join(', ');
@@ -215,10 +249,10 @@ export function makePerson(look) {
   const face = { eyes: 'oval', mouth: 'smile', browTilt: 0, ...look.face, brow: look.brows || (look.hairStyle === 'bald' ? '#5a4030' : look.hair) };
   if (look.bigEyes) face.eyes = 'wide';
   const mii = buildMii({
-    gender: look.gender || 'male', head: look.head, hair: look.hairModel, hat: look.hat, hatColor: look.hatColor,
-    face, mat, outlineMat, outlineHeadMat, colors,
+    gender: look.gender || 'male', head: look.head, headWidth: look.headWidth, hair: look.hairModel, hat: look.hat, hatColor: look.hatColor,
+    face, photo: look.photo, mat, outlineMat, outlineHeadMat, colors,
   });
-  mii.model.scale.setScalar(MII_SCALE);
+  mii.model.scale.setScalar(MII_SCALE * (look.scale || 1));   // look.scale < 1 for kids
   body.add(mii.model);
   const { headFrame: hf, faceFront: fz, eyeY: ey, eyeX: ex, handR, handL } = mii;
   const chest = frameOn(mii.bones.chest);        // torso frame, origin at the chest bone (0.7 m up the body)
@@ -234,10 +268,12 @@ export function makePerson(look) {
     part(barGeo, frameMat, hf, [0, ey + 0.015, fz + 0.016], 0).scale.x = 1.1;
   }
   if (look.earbuds) for (const x of [-0.27, 0.27]) part(budGeo, mat('#ffffff'), hf, [x, ey - 0.03, 0.03], 0);
-  if (look.headset) {
-    part(headsetGeo, mat('#ececf2'), hf, [0, ey + 0.01, fz - 0.03]);
-    part(new THREE.BoxGeometry(0.34, 0.1, 0.02), darkMat, hf, [0, ey + 0.01, fz + 0.045], 0);
-    part(headStrapGeo, darkMat, hf, [0, ey + 0.02, 0.0], 0).rotation.x = Math.PI / 2;
+  if (look.headset) {                         // over the eyes, or pushed up on the forehead so a photo face shows
+    const hs = new THREE.Group(); hf.add(hs);
+    if (look.photo) { hs.position.set(0, ey + 0.15, -0.02); hs.rotation.x = -0.45; } else hs.position.y = ey;
+    part(headsetGeo, mat('#ececf2'), hs, [0, 0.01, fz - 0.03]);
+    part(new THREE.BoxGeometry(0.34, 0.1, 0.02), darkMat, hs, [0, 0.01, fz + 0.045], 0);
+    part(headStrapGeo, darkMat, hs, [0, 0.02, 0.0], 0).rotation.x = Math.PI / 2;
   }
 
   // torso accessories (chest frame: neck at y ≈ 0.39, shoulders ≈ 0.33, chest front at z ≈ 0.12)
@@ -257,15 +293,9 @@ export function makePerson(look) {
     part(scarfGeo, sm, chest, [0, 0.39, 0.0]).rotation.x = Math.PI / 2;
     part(scarfTailGeo, sm, chest, [0.06, 0.24, 0.13], 0).rotation.z = 0.12;
   }
-  if (look.outfit === 'hoodie') { const h = part(hoodGeo, mii.parts.torso, chest, [0, 0.36, -0.1]); h.rotation.x = -1.1; }
   if (look.lanyard) {
     const c = part(cordGeo, mat('#e84a7a'), chest, [0, 0.33, 0.04], 0); c.rotation.x = -1.25;
     part(badgeGeo, mat('#ffffff'), chest, [0, 0.2, 0.14], 0);
-  }
-  if (look.bag) {
-    const bm = mat(look.bag);
-    part(bagGeo, bm, chest, [-0.26, -0.12, 0.0]);
-    const s = part(strapGeo, bm, chest, [-0.12, 0.1, 0.0], 0); s.rotation.z = 0.5;
   }
 
   // props in the right hand (hand frame: arm along −y, z forward, origin at the wrist)
@@ -276,12 +306,6 @@ export function makePerson(look) {
   if (look.carry === 'soda') phone = part(canGeo, mat('#c8202c'), handR, [0, -0.06, 0.07]);
   // two-hand props, held in front of the body
   let twoHand = false;
-  if (look.carry === 'sink') {
-    twoHand = true;
-    const sink = part(sinkGeo, mat('#f4f6f8'), body, [0, 0.6, 0.36]);
-    part(basinGeo, mat('#b9c3cc'), sink, [0, 0.07, 0], 0);
-    part(tapGeo, mat('#c0c6cc'), sink, [0, 0.13, -0.12], 0);
-  }
   if (look.carry === 'box') {
     twoHand = true;
     const box = part(cardboardGeo, mat('#c8955a'), body, [0, 0.62, 0.34]);
@@ -304,7 +328,7 @@ const qUpL = new THREE.Quaternion(), qUpR = new THREE.Quaternion(), qLoL = new T
  * Arm angles are for an arm hanging straight down: x swings it forward (−) / back (+), z lifts it
  * outward (− on the left arm, + on the right). Each arm has an upper (u) and a forearm (f) angle.
  */
-export function pose(person, phase, amp, mode, t) {
+export function pose(person, phase, amp, mode, t, fx) {
   const { body, head, legL, legR, armL, armR, foreL, foreR } = person.userData.rig;
   const s = Math.sin(phase) * amp;
   const L = { ux: -s * 0.7, uz: -0.1, fx: -s * 0.7 - 0.15, fz: -0.1 };
@@ -326,12 +350,33 @@ export function pose(person, phase, amp, mode, t) {
     body.position.y = Math.abs(Math.sin(t * 9)) * 0.07;
     hx = Math.sin(t * 4.5) * 0.12;
   }
+  // social overlay from crowd.js (all 0..1, eased): talking gestures, waving, nodding, laughing, head turn
+  let yaw = 0;
+  if (fx && mode !== 'pitch') {
+    const mix = (A, to, k) => { for (const key in to) A[key] += (to[key] - A[key]) * k; };
+    if (fx.talk > 0.01) {                            // one hand gestures in front of the chest, head bobs
+      const sd = fx.hand, H = sd > 0 ? R : L, w = fx.seed;
+      mix(H, { ux: -0.35, uz: sd * 0.25, fx: -1.45 + Math.sin(t * 5.5 + w) * 0.35, fz: -sd * 0.25 + Math.sin(t * 3.7 + w) * 0.25 }, fx.talk);
+      hx += Math.sin(t * 7 + w) * 0.05 * fx.talk;
+    }
+    if (fx.wave > 0.01) {                            // arm up beside the head, forearm swinging side to side
+      const sd = person.userData.handProp ? -1 : 1, H = sd > 0 ? R : L;
+      mix(H, { ux: -0.2, uz: sd * 2.2, fx: -0.25, fz: sd * (2.75 + Math.sin(t * 13) * 0.45) }, fx.wave);
+    }
+    if (fx.nod > 0.01) hx += Math.max(0, Math.sin(t * 9)) * 0.2 * fx.nod;
+    if (fx.laugh > 0.01) {                           // head back, bouncing, a hand on the belly
+      hx -= 0.22 * fx.laugh;
+      body.position.y += Math.abs(Math.sin(t * 15)) * 0.03 * fx.laugh;
+      if (!person.userData.twoHand) mix(L, { ux: -0.4, uz: -0.05, fx: -1.5, fz: 0.5 }, fx.laugh);
+    }
+    yaw = fx.yaw;
+  }
   setBone(legL, s * 0.6, 0, 0); setBone(legR, -s * 0.6, 0, 0);
   armRot(-1, L.ux, L.uz, qUpL); armRot(-1, L.fx, L.fz, qLoL);
   armRot(1, R.ux, R.uz, qUpR); armRot(1, R.fx, R.fz, qLoR);
   setBone(armL, 0, 0, 0, qUpL); setChildBone(foreL, qUpL, qLoL);
   setBone(armR, 0, 0, 0, qUpR); setChildBone(foreR, qUpR, qLoR);
-  setBone(head, hx, 0, 0);
+  setBone(head, hx, yaw, 0);
 }
 
 /** Encase a person in ice: tint them icy and add a translucent block. Returns the block (scale it in). */
