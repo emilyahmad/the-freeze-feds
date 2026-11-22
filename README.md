@@ -1,8 +1,31 @@
 # The Freeze Feds
 
+## Live Demo: https://the-freeze-feds.vercel.app/
+
+## How to play
+1. Click on suspicious people walking around to inspect their LinkedIn profiles
+2. If you wanna freeze them, click the freeze button and give camera access to the web app to throw a snowball at the CEO (make a fist and release it by "throwing" it at the camera)
+3. If innocent you can let them go and continue your perusal
+4. If you hit a tech exec you get 10+ seconds added to the clock, if you hit an innocent, then you'll lose 10 seconds on the clock
+5. Try to freeze them all before time runs out!
+
+## How to run it yourself
+1. install npm
+   npm install
+2. run locally
+   npm run dev
+3. click on the local host link and you're done !
+
+## Tools
+Built with Blender, JS, CSS, and HTML
+
+## Team!
+Emily Ahmad, Adishree Das, Haya Raham Asif
+
+## How we built it
 When we started the hackathon, we had two big ideas:
 
-When we firsrt landed in SF, one of the biggest things we were looking forward to was seeing all the AI billboards. On the way to the hostel, we spotted about 10. This inspired our first idea:
+When we first landed in SF, one of the biggest things we were looking forward to was seeing all the AI billboards. On the way to the hostel, we spotted about 10. This inspired our first idea:
 + an eye-spy game where you are traversing the streets of downtown SF (either through Google streetview or embedding a Youtube video). Every 5-8 seconds, they'd have to FREEZE and find something within the video frame -- an AI billboard, an undercover tech executive, a cable car; something SF-coded
 + our second idea was a "be elsa" simulator, a pose/gesture detection computer vision project where you can use different poses to generate snow figures on the screen, some abilities include: tracing with ice, generating blizzards by waving both palms towards the camera slowly, erecting icicles and snowmen by pumping your fists up, throwing snowballs at the screen, and much more.
 
@@ -29,6 +52,8 @@ A take on Find Mii but you're the freeze police and you're freezing tech execs i
 <p align="center">
   <img src="design-references/demo.png" alt="The Freeze Feds demo" width="85%">
 </p>
+
+
 
 <!--
 navigate the screen using macropad:
