@@ -1,7 +1,9 @@
 node_modules/
-.env
-.DS_Store
+dist/
 
-# third-party reference images: kept locally, not published
-design-references/
-Screenshot*.png
+# character models are local-only (third-party assets); keep the README
+public/models/*
+!public/models/README.md
+
+# original model files (converted to GLB in public/models)
+model-sources/
