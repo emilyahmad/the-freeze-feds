@@ -223,11 +223,19 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
 @keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.2); } to { opacity: .95; transform: rotate(-12deg) scale(1); } }
 
 /* ---- the photo's pedestrian signal: a blinking "don't walk" hand (src/signal.js) ---- */
-/* box = original photo px 1360..1520 × 70..410 (where its pole stood, reaching down to the road), in % of the photo */
-#walk-sign { position: absolute; left: 81.34%; top: 7.44%; width: 9.57%; height: 36.13%; pointer-events: none; }
-#walk-sign svg { display: block; width: 100%; height: 100%; overflow: visible; }
-#walk-sign .ws-man { display: none; }
-#walk-sign:not(.stop) .ws-man { display: inline; }
+/* box = original photo px ≈1380..1515 × 72..404 (the art's crop, scaled so the pole's base is centred at x 1396 on the road
+   at y 402 and the pole is 329 px tall, like the old drawn one), in % of the 1672×941 photo */
+#walk-sign { position: absolute; left: 82.53%; top: 7.61%; width: 8.11%; height: 35.25%; pointer-events: none; }
+#walk-sign img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+#walk-sign::before {   /* soft shadow under the base */
+  content: ''; position: absolute; left: 3%; width: 30%; bottom: -.6%; height: 1.4%; border-radius: 50%;
+  background: rgba(30, 30, 40, .28); filter: blur(1px);
+}
+/* the black signal face in the art (crop px 217..512 × 647..944 of 796×1948): main.js zooms the intro onto it */
+#ws-face { position: absolute; left: 27.26%; top: 33.21%; width: 37.06%; height: 15.25%; }
+#walk-sign .ws-hand { filter: drop-shadow(0 0 2px rgba(255, 138, 31, .9)); }
+#walk-sign .ws-man { display: none; filter: drop-shadow(0 0 2px rgba(246, 246, 238, .8)); }
+#walk-sign:not(.stop) .ws-man { display: block; }
 #walk-sign:not(.stop) .ws-hand, #walk-sign.dark .ws-hand { display: none; }
 
 /* ---- Freeze button under the phone, and the snowball cam (src/throwcam.js) ---- */
@@ -275,6 +283,11 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
   background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, .9), rgba(255, 255, 255, 0) 45%, rgba(170, 210, 235, .28) 62%, rgba(170, 210, 235, 0) 72%); }
 .splat-trail { position: absolute; left: 0; right: 0; bottom: 100%; height: 60vh;   /* wet streaks left above it as it slides off */
   -webkit-mask: linear-gradient(to top, #000, transparent); mask: linear-gradient(to top, #000, transparent); }
+/* a partial splat (the finale's volleys before the last ball): a round blob where it hit */
+.splat.blob { inset: auto; filter: drop-shadow(0 .3vmax .8vmax rgba(40, 80, 120, .35)); }
+.splat.blob .splat-body { inset: 0; border-radius: 50%; }
+.splat.blob .splat-trail { left: 15%; right: 15%; height: 40vh; }
+.splat.blob .splat-text { top: 50%; width: 92%; white-space: normal; text-align: center; line-height: 1; }   /* the thrower's name */
 .splat-text { position: absolute; left: 50%; top: 40%; translate: -50% -50%; rotate: -6deg; white-space: nowrap;
   font: 700 clamp(36px, 7vw, 96px) Itim, system-ui, sans-serif; color: var(--bad); text-shadow: 0 .05em 0 #fff, 0 .08em .2em rgba(120, 30, 50, .25); }
 

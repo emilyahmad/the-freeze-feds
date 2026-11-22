@@ -44,15 +44,19 @@ export function snowBurst(x, y) {
 /** A snowball flies out of the street from `from` (stage px) toward the player, grows until it splats over the whole
  *  screen, sticks for a moment, then slides off the bottom like snow down a window. Used by an innocent at the ID-check
  *  spot (with `text`) and by the escaped bosses in the finale (`far`: they throw from the crosswalk, so the ball starts
- *  smaller and arcs a little). onImpact() fires on the splat, onDone() once it has slid off. */
+ *  smaller and arcs a little). With `size` (a fraction of the screen's longer side) it splats as a round blob that big
+ *  where it lands instead of covering the whole screen (the finale's volleys, all but the last ball).
+ *  onImpact() fires on the splat, onDone() once it has slid off. */
 const BACK_FLY = 0.5, BACK_HOLD = 0.75, BACK_SLIDE = 1.2;   // seconds: flight toward the screen, stuck on it, sliding off
-export function snowBack(from, { text = '', far = false, onImpact, onDone } = {}) {
+export function snowBack(from, { text = '', far = false, size = 0, onImpact, onDone } = {}) {
   const stage = $('#stage'), w = stage.clientWidth, h = stage.clientHeight;
   const ball = Object.assign(document.createElement('div'), { className: 'snowball back' });
   stage.appendChild(ball);
   // perspective: depth shrinks linearly in time, so scale = s0 / depth and it rushes in faster the closer it gets
-  const s0 = far ? 0.12 : 0.45, s1 = Math.hypot(w, h) / 64 * 1.3, frames = [];
-  const to = far ? { x: w * (0.35 + Math.random() * 0.3), y: h * (0.35 + Math.random() * 0.2) } : { x: w * 0.5, y: h * 0.45 };
+  const D = size * Math.max(w, h);                           // blob diameter (px), or 0 for the whole screen
+  const s0 = far ? 0.12 : 0.45, s1 = D ? D * 0.7 / 64 : Math.hypot(w, h) / 64 * 1.3, frames = [];
+  const to = D ? { x: w * (0.15 + Math.random() * 0.7), y: h * (0.2 + Math.random() * 0.45) }   // blobs land all over
+    : far ? { x: w * (0.35 + Math.random() * 0.3), y: h * (0.35 + Math.random() * 0.2) } : { x: w * 0.5, y: h * 0.45 };
   const arc = far ? h * 0.08 : 0;
   for (let i = 0; i <= 16; i++) {
     const t = i / 16, depth = 1 - t * (1 - s0 / s1), k = (s0 / depth - s0) / (s1 - s0);   // k: 0 → 1 screen-space progress
@@ -61,6 +65,7 @@ export function snowBack(from, { text = '', far = false, onImpact, onDone } = {}
   ball.animate(frames, { duration: BACK_FLY * 1000, easing: 'linear', fill: 'forwards' }).onfinish = () => {
     if (!ball.isConnected) return;                           // cleared mid-flight (round restarted)
     ball.remove();
+    if (D) return blob(stage, to, D, h, text, onImpact, onDone);
     const splat = Object.assign(document.createElement('div'), { className: 'splat' });
     const body = Object.assign(document.createElement('div'), { className: 'splat-body' });
     const trail = Object.assign(document.createElement('div'), { className: 'splat-trail' });
@@ -93,6 +98,44 @@ export function snowBack(from, { text = '', far = false, onImpact, onDone } = {}
       { transform: 'translateY(125%) scale(1)', offset: 1 },
     ], { duration: total, fill: 'forwards' }).onfinish = () => { splat.remove(); onDone?.(); };
   };
+}
+
+/** A partial splat: a lumpy round blob of snow `D` px across centred on `at` (with `text` written in it), which sticks,
+ *  then slides off the bottom. */
+function blob(stage, at, D, h, text, onImpact, onDone) {
+  const splat = Object.assign(document.createElement('div'), { className: 'splat blob' });
+  splat.style.cssText = `left:${at.x - D / 2}px;top:${at.y - D / 2}px;width:${D}px;height:${D}px`;
+  const body = Object.assign(document.createElement('div'), { className: 'splat-body' });
+  const trail = Object.assign(document.createElement('div'), { className: 'splat-trail' });
+  trail.style.background = 'linear-gradient(90deg, transparent 12%, rgba(235, 248, 255, .3) 25% 32%, transparent 38% 55%, rgba(235, 248, 255, .35) 60% 66%, transparent 74%)';
+  splat.append(trail, body);
+  for (let i = 0, n = 11; i < n; i++) {                      // lumps around the rim
+    const a = (i + Math.random() * 0.5) / n * Math.PI * 2, s = 22 + Math.random() * 20, r = 44 + Math.random() * 6;
+    body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-lump' }))
+      .style.cssText = `width:${s}%;height:${s}%;left:${50 + Math.cos(a) * r - s / 2}%;top:${50 + Math.sin(a) * r - s / 2}%`;
+  }
+  for (let i = 0; i < 5; i++) {                              // flecks thrown off the edge
+    const a = Math.random() * Math.PI * 2, s = 4 + Math.random() * 7, r = 60 + Math.random() * 14;
+    body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-lump' }))
+      .style.cssText = `width:${s}%;height:${s}%;left:${50 + Math.cos(a) * r - s / 2}%;top:${50 + Math.sin(a) * r - s / 2}%`;
+  }
+  for (let i = 0; i < 4; i++) {                              // soft shaded clumps
+    const s = 30 + Math.random() * 30;
+    body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-clump' }))
+      .style.cssText = `width:${s}%;height:${s}%;left:${20 + Math.random() * 60 - s / 2}%;top:${25 + Math.random() * 50}%`;
+  }
+  if (text) body.appendChild(Object.assign(document.createElement('div'), { className: 'splat-text', textContent: text }))
+    .style.fontSize = `${Math.round(D * 0.13)}px`;
+  stage.appendChild(splat);
+  onImpact?.();
+  const drop = h - at.y + D, total = 120 + BACK_HOLD * 1000 + BACK_SLIDE * 1000, t = (ms) => ms / total;
+  splat.animate([
+    { transform: 'translateY(0) scale(.6)', opacity: 0.7, offset: 0 },
+    { transform: 'translateY(0) scale(1)', opacity: 1, offset: t(120) },
+    { transform: 'translateY(0) scale(1)', offset: t(120 + BACK_HOLD * 1000), easing: 'cubic-bezier(.55, 0, .85, .45)' },
+    { transform: `translateY(${D * 0.06}px) scale(1, 1.04)`, offset: t(120 + BACK_HOLD * 1000 + 300), easing: 'cubic-bezier(.4, 0, .9, .6)' },
+    { transform: `translateY(${drop}px) scale(1, 1.04)`, offset: 1 },
+  ], { duration: total, fill: 'forwards' }).onfinish = () => { splat.remove(); onDone?.(); };
 }
 
 /** Drop every snowball in flight or splatted on the screen at once (round restarted / mode stopped). */

@@ -14,51 +14,14 @@
     <!-- the street photo, scaled to cover the window (main.js layout); things pinned to the photo go in here -->
     <div id="photo">
     <img id="bg" src="./street.webp" alt="" draggable="false" />
-    <!-- the crossing signal post, drawn over the art where the original photo's pole stood (src/signal.js):
-         viewBox units are the original photo's pixels (1672×941), offset to this box's corner (1360, 70); the base stands on the road just past the houses (y 402) -->
+    <!-- the crossing signal post (src/signal.js): the teammate's hand-drawn art (design-references/crosswalk-art/signal-*.png,
+         cropped to the same box in public/signal/), pinned where the original photo's pole stood; the base stands on the road
+         just past the houses (original photo y 402). The hand and the walking man are stacked over the pole's black face (#ws-face). -->
     <div id="walk-sign" class="stop" aria-hidden="true">
-      <svg viewBox="0 0 160 340" preserveAspectRatio="none">
-        <defs>
-          <filter id="ws-wobble" x="-5%" y="-5%" width="110%" height="110%">
-            <feTurbulence type="fractalNoise" baseFrequency=".09" numOctaves="2" seed="7"/>
-            <feDisplacementMap in="SourceGraphic" scale="2.2"/>
-          </filter>
-          <filter id="ws-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-        </defs>
-        <ellipse cx="36" cy="332" rx="20" ry="3.5" fill="rgba(30, 30, 40, .28)"/>
-        <g filter="url(#ws-wobble)" stroke="#1d2420" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">
-          <!-- pole, with a flared base and a cap -->
-          <path d="M31 8 h10 v292 l6 10 v22 h-22 v-22 l6 -10z" fill="#2f4a3c"/>
-          <path d="M33.5 12 v286" stroke="#5f8570" stroke-width="2" fill="none"/>
-          <rect x="29" y="3" width="14" height="7" rx="3.5" fill="#2f4a3c"/>
-          <path d="M28 315 h16 M30 140 h12 M30 220 h12" fill="none"/>
-          <!-- street sign -->
-          <rect x="41" y="25" width="112" height="38" rx="4" fill="#1f8a5a"/>
-          <rect x="45" y="29" width="104" height="30" rx="3" fill="none" stroke="#f4f1e6" stroke-width="1.8"/>
-          <!-- arms and the signal box -->
-          <path d="M41 112 h14 M41 158 h14" stroke-width="4"/>
-          <rect x="52" y="103" width="62" height="62" rx="7" fill="#26332c"/>
-          <rect id="ws-face" x="57" y="108" width="52" height="52" rx="4" fill="#0b0d0c"/>
-        </g>
-        <text x="97" y="52" text-anchor="middle" font-family="Itim, system-ui, sans-serif" font-weight="700" font-size="21"
-              fill="#f4f1e6" letter-spacing="1.5">POWELL</text>
-        <!-- don't walk: the orange hand -->
-        <g class="ws-hand" filter="url(#ws-glow)" fill="#ff8a1f" transform="translate(64.5 112) scale(.92)">
-          <rect x="10" y="6" width="5" height="22" rx="2.5" /><rect x="15.8" y="3" width="5" height="25" rx="2.5" />
-          <rect x="21.6" y="4" width="5" height="24" rx="2.5" /><rect x="27.4" y="8" width="4.6" height="20" rx="2.3" />
-          <rect x="10" y="20" width="22" height="22" rx="5" />
-          <rect x="9" y="20" width="6" height="20" rx="3" transform="rotate(-32 12 39)" />
-        </g>
-        <!-- walk: the white walking man -->
-        <g class="ws-man" filter="url(#ws-glow)" fill="none" stroke="#f6f6ee" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="86" cy="117" r="4.6" fill="#f6f6ee" stroke="none"/>
-          <path d="M85 124 L81.5 141"/>
-          <path d="M81.5 141 L75 155 M81.5 141 L89 147 L90 156"/>
-          <path d="M84.5 127 L77 135 L76 141 M84.5 127 L90 134 L95 135"/>
-        </g>
-      </svg>
+      <img src="./signal/pole.webp" alt="" draggable="false" />
+      <div id="ws-face"></div>
+      <img class="ws-hand" src="./signal/hand.webp" alt="" draggable="false" />
+      <img class="ws-man" src="./signal/walk.webp" alt="" draggable="false" />
     </div>
     </div>
     <canvas id="gl"></canvas>

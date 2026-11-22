@@ -17,9 +17,10 @@ const SNOWBALL_TIME = 0.45;   // flight time of the thrown snowball (s)
 const BRACE_FROM = 0.45;
 const PAYBACK_DELAY = 0.45, PAYBACK_TIME = 1.7;   // wrong person: pause before they throw back, then how long until they walk off      // they start to cower once the throw is this far along (0..1 of the camera's meter)
 // finale (time ran out with bosses still loose): once they're lined up on the crosswalk they throw two volleys at the
-// screen, left to right then back (VOLLEY_GAP s between throwers, VOLLEY_BREAK s between volleys); each ball splats over
-// the whole screen and slides off like the innocent's throw-back (snowBack), and the over screen comes up FINALE_HOLD s
+// screen, left to right then back (VOLLEY_GAP s between throwers, VOLLEY_BREAK s between volleys); each ball splats as a
+// blob where it hits (BLOB_SIZE) except the very last, which splats over the whole screen; each slides off like the innocent's throw-back (snowBack), and the over screen comes up FINALE_HOLD s
 // after the last one has slid off
+const BLOB_SIZE = [0.22, 0.32];   // finale splats before the last: blob diameter, as a fraction of the screen's longer side
 const FINALE_START = 0.5, VOLLEY_GAP = [0.55, 0.4], VOLLEY_BREAK = 0.9, FINALE_HOLD = 0.3;
 
 let cam = null, noCam = false;   // one webcam panel for the page; noCam once the camera has failed to start
@@ -222,8 +223,9 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
         sfx.whoosh();
         a.person.updateMatrixWorld(true);
         const from = toScreen(a.person.userData.snowball.getWorldPosition(_v));
-        snowBack(from, {
-          far: true, onImpact: () => sfx.splat(),
+        snowBack(from, {   // a blob where it hits, until the very last ball, which buries the whole screen
+          far: true, text: a.name, size: i === order.length - 1 ? 0 : BLOB_SIZE[0] + Math.random() * (BLOB_SIZE[1] - BLOB_SIZE[0]),
+          onImpact: () => sfx.splat(),
           onDone: () => { if (++cleared === order.length) later(FINALE_HOLD, done); },
         });
       }));
