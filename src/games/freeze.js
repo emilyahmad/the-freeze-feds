@@ -3,8 +3,11 @@
 // toward it, opening to a palm as it gets close) to throw a snowball: a boss is frozen and sent off down the street, an innocent throws one right back; click anywhere
 // else to let them go. Right catch +BONUS s, wrong −PENALTY s; ends at 0 s or when every CEO is frozen.
 // The clock is paused while the webcam is open. If the camera can't start, the button freezes them directly.
+// Macropad / keyboard (pad(), see src/macropad.js): left/right move a selection through the people on screen in
+// left-to-right order (it starts on the leftmost and sticks to that person as they walk); select checks them or lets
+// them go; throw is the Freeze button (pressed again while the webcam is open, it throws straight away).
 import * as THREE from 'three';
-import { hud, popup, snowBurst, snowBack, snowSplot, clearSplots, wrongFlash } from '../ui.js';
+import { hud, popup, snowBurst, snowBack, clearSplats, wrongFlash } from '../ui.js';
 import * as sfx from '../sfx.js';
 import { ThrowCam, preloadHands } from '../throwcam.js';
 
@@ -14,10 +17,10 @@ const SNOWBALL_TIME = 0.45;   // flight time of the thrown snowball (s)
 const BRACE_FROM = 0.45;
 const PAYBACK_DELAY = 0.45, PAYBACK_TIME = 1.7;   // wrong person: pause before they throw back, then how long until they walk off      // they start to cower once the throw is this far along (0..1 of the camera's meter)
 // finale (time ran out with bosses still loose): once they're lined up on the crosswalk they throw two volleys at the
-// screen, left to right then back (VOLLEY_GAP s between throwers, VOLLEY_BREAK s between volleys); the splotches stay
-// FINALE_HOLD s after the last one lands, then slide off as the over screen comes up
-const FINALE_START = 0.5, VOLLEY_GAP = [0.32, 0.16], VOLLEY_BREAK = 0.8, FINALE_HOLD = 1.4;
-const SPLOT_SIZE = [22, 32];  // splotch size on the screen, vmin
+// screen, left to right then back (VOLLEY_GAP s between throwers, VOLLEY_BREAK s between volleys); each ball splats over
+// the whole screen and slides off like the innocent's throw-back (snowBack), and the over screen comes up FINALE_HOLD s
+// after the last one has slid off
+const FINALE_START = 0.5, VOLLEY_GAP = [0.55, 0.4], VOLLEY_BREAK = 0.9, FINALE_HOLD = 0.3;
 
 let cam = null, noCam = false;   // one webcam panel for the page; noCam once the camera has failed to start
 const _v = new THREE.Vector3();
@@ -26,10 +29,11 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
   const { crowd, profile, raycaster, ndc, camera, canvas, size } = ctx;
   let timeLeft = time, caught = 0, wrong = 0, lastTick = 0, active = true;
   let checking = null, deciding = false, needPhoto = false, hovered = null, splatted = false;
+  let selected = null, selectedAt = null;           // macropad selection, and where it last was on screen
   const frozen = [];
   let alive = true;                                  // false once the mode is stopped (finale timers check it)
   const timers = [], later = (secs, fn) => timers.push(setTimeout(() => { if (alive) fn(); }, secs * 1000));
-  clearSplots(true);
+  clearSplats();
 
   sfx.unlock();
   crowd.reset();
@@ -118,6 +122,46 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
     }
   }
 
+  // ---- macropad selection ----
+  const EDGE = 0.03;                                 // people this close to the screen edge (share of width) aren't selectable
+  /** Where `a` is on screen if they can be selected (on the street, in view, not frozen), else null. */
+  function selectable(a) {
+    if (!a || a.frozen || a.leaving || !crowd.agents.includes(a)) return null;
+    const p = headOnScreen(a), { w, h } = size();
+    return p.x > w * EDGE && p.x < w * (1 - EDGE) && p.y > 0 && p.y < h ? p : null;
+  }
+  const candidates = () => crowd.agents.map((a) => ({ a, p: selectable(a) })).filter((c) => c.p);
+  const minBy = (cs, f) => cs.reduce((b, c) => (f(c) < f(b) ? c : b), cs[0]);
+  /** The selected person, reselecting (nearest to where the last one was, else the leftmost) if they've gone. */
+  function padTarget() {
+    if (checking) return checking;
+    const p = selectable(selected);
+    if (p) { selectedAt = p; return selected; }
+    const cs = candidates();
+    const c = cs.length ? minBy(cs, selectedAt ? (c) => Math.hypot(c.p.x - selectedAt.x, c.p.y - selectedAt.y) : (c) => c.p.x) : null;
+    selected = c?.a ?? null; selectedAt = c?.p ?? selectedAt;
+    return selected;
+  }
+  const marker = document.querySelector('#pad-marker');
+  /** Bob an arrow over the selected person's head (above the hair, following the hover swell). */
+  function showMarker(a) {
+    marker.hidden = !a;
+    if (!a) return;
+    a.person.updateMatrixWorld(true);
+    const p = toScreen(a.person.userData.headFrame.localToWorld(_v.set(0, 0.85, 0)));
+    marker.style.transform = `translate(${p.x}px, ${p.y}px)`;
+  }
+  /** Move the selection to the next person to the left (dir −1) or right (+1), wrapping around at the end. */
+  function step(dir) {
+    const cur = selectable(selected);
+    if (!cur) { padTarget(); return; }              // nobody selected yet: this press just picks someone
+    const cs = candidates().filter((c) => c.a !== selected);
+    if (!cs.length) return;
+    const ahead = cs.filter((c) => (c.p.x - cur.x) * dir > 0);
+    const c = ahead.length ? minBy(ahead, (c) => Math.abs(c.p.x - cur.x)) : minBy(cs, (c) => c.p.x * dir);
+    selected = c.a; selectedAt = c.p;
+  }
+
   function startCheck(a) {
     checking = a; deciding = false;
     crowd.setHighlight(hovered, false); hovered = null; crowd.setHover(null);
@@ -165,23 +209,22 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
     const line = won ? [] : escaped.filter((a) => crowd.agents.includes(a));
     crowd.exit(line);
     if (!line.length) { onDone?.(result); return; }
-    crowd.lineUp(line, () => volleys(line, () => { clearSplots(); onDone?.(result); }));
+    crowd.lineUp(line, () => volleys(line, () => onDone?.(result)));
   }
 
   /** The lined-up bosses each throw at the screen, left to right, then again right to left a bit faster. */
   function volleys(line, done) {
     const order = [...line, ...[...line].reverse()];
-    let t = FINALE_START, landed = 0;
+    let t = FINALE_START, cleared = 0;
     order.forEach((a, i) => {
       if (i) t += i === line.length ? VOLLEY_BREAK : VOLLEY_GAP[i < line.length ? 0 : 1];
       later(t, () => crowd.throwSnowball(a, () => {
         sfx.whoosh();
         a.person.updateMatrixWorld(true);
-        const from = toScreen(a.person.userData.snowball.getWorldPosition(_v)), { w, h } = size();
-        const to = { x: w * (0.1 + Math.random() * 0.8), y: h * (0.12 + Math.random() * 0.7) };
-        snowSplot(from, to, {
-          size: SPLOT_SIZE[0] + Math.random() * (SPLOT_SIZE[1] - SPLOT_SIZE[0]),
-          onImpact: () => { sfx.splat(); if (++landed === order.length) later(FINALE_HOLD, done); },
+        const from = toScreen(a.person.userData.snowball.getWorldPosition(_v));
+        snowBack(from, {
+          far: true, onImpact: () => sfx.splat(),
+          onDone: () => { if (++cleared === order.length) later(FINALE_HOLD, done); },
         });
       }));
     });
@@ -203,13 +246,29 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
       if (timeLeft <= 0) end(false);
     },
 
+    /** A macropad / keyboard button: 'left', 'right', 'select' or 'throw'. */
+    pad(btn) {
+      if (!active) return;
+      if (checking) {
+        if (deciding) return;                                     // a stamp is already coming down
+        if (btn === 'select') { selected = checking; releaseNow(null); }
+        else if (btn === 'throw') { if (cam.isOpen) { cam.close(); throwAt(checking); } else openCam(); }
+        return;
+      }
+      if (btn === 'left' || btn === 'right') step(btn === 'left' ? -1 : 1);
+      else if (btn === 'select') { const had = selectable(selected), a = padTarget(); if (had && a) startCheck(a); }
+    },
+
     hover(pointer) {
       let a = null;
-      if (pointer && active) { raycaster.setFromCamera(ndc, camera); a = crowd.pick(raycaster); }
+      const pad = active && ctx.usingPad?.();
+      if (pad) a = padTarget();                     // the macropad's selection stands in for the cursor
+      else if (pointer && active) { raycaster.setFromCamera(ndc, camera); a = crowd.pick(raycaster); }
       if (checking) a = a === checking ? a : null;   // during an ID check only the person being checked is clickable
       if (a !== hovered) { crowd.setHighlight(hovered, false); crowd.setHighlight(a, true); hovered = a; }
       canvas.className = active ? (a ? 'on-person' : 'pointing') : '';
       crowd.setHover(checking ? null : a);          // big head on hover (not on the person already up at the camera)
+      showMarker(pad && !checking ? a : null);
     },
 
     down(pointer) {
@@ -227,6 +286,6 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
 
     /** Quit without a result (back to the home screen). */
     stop() {
-      active = false; alive = false; timers.forEach(clearTimeout); clearSplots(true); sfx.duckMurmur(false); cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); },
+      active = false; alive = false; marker.hidden = true; timers.forEach(clearTimeout); clearSplats(); sfx.duckMurmur(false); cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); },
   };
 }

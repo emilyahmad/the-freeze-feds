@@ -16,3 +16,38 @@ We finally narrowed down on an idea
 Once we got the theme: "Freeze"
 
 A take on Find Mii but you're the freeze police and you're freezing tech execs in the streets of SF.
+
+
+
+Hardware idea:
+<p align="center">
+  <img src="design-references/hardware-ideas.jpeg" alt="Hardware idea" width="50%">
+</p>
+
+navigate the screen using macropad:
+macropad functions:
+* starts by selecting Mii on the very left (stays selected), then users can you use SW1 (left) and SW2 (right) to select Miis. If they want to inspect a Mii (view their linkedIn), they can press SW3 and the mii will come forward. Once they are inspecting the Mii, they can press Sw3 again to relesae then, or Sw4 to trigger the snowball throwing, and then the game continues.
+
+It would be cool if you could plug in the macropad to any device, and it would open up the game in a browser, then start playing
+
+Also for a complete hardware implementation/or issues with the web camera on the device, we can connect the xiao esp32-s3 sense as the camera
+
+and somehow use the TFT - maybe to show the linkedin profile?
+it would start off by saying no Mii selected, then when you want to inspect one it would show up
+
+### Setting up the macropad
+
+The pad is the s'mores-pad (Seeed XIAO ESP32-C3 with a 128x32 OLED). Just like in the original [smores-pad](https://github.com/emilyahmad/smores-pad) firmware, it pairs as a **Bluetooth keyboard** called "Macropad", so it works in any browser and needs no cable once it's charged or powered.
+
+1. **Flash it** (Arduino IDE, same setup as the smores-pad): open `hardware/freeze-pad/freeze-pad.ino`, board **XIAO_ESP32C3**, with the ESP32-BLE-Keyboard and Adafruit SSD1306/GFX libraries installed. Then upload.
+2. **Pair it:** the OLED says "Pairing…". On the Mac, go to System Settings → Bluetooth and connect "Macropad". If it was already paired with the old firmware, it usually reconnects by itself. If it doesn't, choose "Forget This Device" and pair again. When it's connected, the OLED says "Freeze Feds / ready to freeze".
+3. **Play:** run `npm run dev` and open the game. Click the game window once so it has keyboard focus.
+
+| Key | Types | Street | Checking someone |
+|---|---|---|---|
+| SW1 | ← | select the next person to the left | – |
+| SW2 | → | select the next person to the right | – |
+| SW3 | Enter | call the selected person up (ID check) | let them go |
+| SW4 | Space | – | Freeze: opens the snowball cam (press again to throw without the gesture) |
+
+On the title and end screens, SW3 (Enter) presses the button. A normal keyboard's arrows, Enter and Space do the same. Moving the mouse switches back to mouse control.

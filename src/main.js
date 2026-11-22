@@ -8,6 +8,7 @@ import { loadMiiModels } from './mii.js';
 import { createFreeze } from './games/freeze.js';
 import { createSignal } from './signal.js';
 import { installWiiCursor } from './cursor.js';
+import { installMacropad } from './macropad.js';
 
 installWiiCursor();
 
@@ -90,11 +91,27 @@ canvas.addEventListener('pointerdown', (e) => {
   mode?.down(pointer);
 });
 
+// ---- macropad (src/macropad.js) ----
+// The pad is a Bluetooth keyboard typing ← → Enter Space. A press switches to pad mode, where the round's selection stands in for the cursor;
+// moving the mouse switches back. On the title and over screens the select key presses the visible button.
+let padMode = false;
+addEventListener('pointermove', (e) => { if (e.movementX || e.movementY) padMode = false; });
+installMacropad((btn) => {
+  padMode = true;
+  if (introBusy) return;
+  if (!$('#title-screen').hidden) {
+    if (btn === 'select') ($('#title-start').hidden ? $('#title-how') : $('#title-start')).click();
+  } else if (!$('#over-screen').hidden) {
+    if (btn === 'select') $('#restart').click();
+  } else mode?.pad?.(btn);
+});
+
 // ---- modes ----
 let mode = null;
 const ctx = {
   renderer, scene, camera, crowd, profile, raycaster, ndc, canvas, showScreen,
   size: () => ({ w: stageW, h: stageH }),
+  usingPad: () => padMode,
   setMode(m) { mode?.stop?.(); mode = m; if (!m) { canvas.className = ''; crowd.setHover(null); } },
 };
 

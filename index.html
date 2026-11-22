@@ -6,7 +6,7 @@
   <title>The Freeze Feds</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Itim&family=Oswald:wght@500;600&display=swap" rel="stylesheet" />
 </head>
 <body>
   <!-- 16:9 stage: the street photo with a transparent WebGL canvas on top -->
@@ -42,7 +42,7 @@
           <rect x="52" y="103" width="62" height="62" rx="7" fill="#26332c"/>
           <rect id="ws-face" x="57" y="108" width="52" height="52" rx="4" fill="#0b0d0c"/>
         </g>
-        <text x="97" y="52" text-anchor="middle" font-family="Fredoka, system-ui, sans-serif" font-weight="700" font-size="21"
+        <text x="97" y="52" text-anchor="middle" font-family="Itim, system-ui, sans-serif" font-weight="700" font-size="21"
               fill="#f4f1e6" letter-spacing="1.5">POWELL</text>
         <!-- don't walk: the orange hand -->
         <g class="ws-hand" filter="url(#ws-glow)" fill="#ff8a1f" transform="translate(64.5 112) scale(.92)">
@@ -64,6 +64,8 @@
     <canvas id="gl"></canvas>
     <div id="fx"></div>
     <div id="flash"></div>
+    <!-- macropad selection: a bobbing arrow over the selected person's head (freeze.js), so they're findable in a crowd -->
+    <div id="pad-marker" hidden></div>
 
     <div id="hud" hidden>
       <div class="pill" id="timer">⏱ 60</div>
@@ -173,7 +175,7 @@
         <img src="./startscreen.png" alt="" draggable="false" />
         <button type="button" id="title-start">START</button>
         <button type="button" id="title-how" hidden>
-          <span>As an official member of the freeze federation, it is your responsibility to identify tech CEOs (think Mark Zuckerberg, Elizabeth Holmes) and freeze them all before the time runs out!</span>
+          <span>As an official member of the <em class="ice">freeze federation</em>, it is your responsibility to identify <em class="ice">tech CEOs</em> <em class="frost">(think Mark Zuckerberg, Elizabeth Holmes)</em> and <em class="ice">freeze them all</em> before the time runs out!</span>
           <span class="go-hint">Click to play!</span>
         </button>
       </div>
