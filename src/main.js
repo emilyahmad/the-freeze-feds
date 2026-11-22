@@ -13,7 +13,7 @@ import { installMacropad } from './macropad.js';
 installWiiCursor();
 
 // The shell: renderer, street scene, crowd, layout, pointer and the animation loop. The round itself lives in
-// src/games/freeze.js as a mode: update(dt), hover(pointer), down(pointer), stop().
+// src/games/freeze.js as a mode: update(dt), hover(pointer), down(pointer), move(pointer), up(pointer), stop().
 const params = new URLSearchParams(location.search), debug = params.has('debug');
 const $ = (s) => document.querySelector(s);
 // phones / tablets: no hover, so no look-around drift, a lighter pixel ratio, a little tap slop (freeze.js) and "Tap" wording
@@ -101,13 +101,17 @@ function setPointer(e) {
   ndc.set(pointer.x / r.width * 2 - 1, 1 - pointer.y / r.height * 2);
   if (debug) { const d = $('#debug-info'); d.hidden = false; d.textContent = `img px ${Math.round((pointer.x + cropX) / photoScale)}, ${Math.round((pointer.y + cropY) / photoScale)}`; }
 }
-canvas.addEventListener('pointermove', setPointer);
+canvas.addEventListener('pointermove', (e) => { setPointer(e); mode?.move?.(pointer); });
 canvas.addEventListener('pointerleave', () => { pointer = null; });
 canvas.addEventListener('pointerdown', (e) => {
   setPointer(e);
+  try { canvas.setPointerCapture(e.pointerId); } catch { /* fine: drags just stop at the edge */ }
   if (debug) console.log('img px', $('#debug-info').textContent);
   mode?.down(pointer);
 });
+
+// a drag (carrying someone by the head) ends on release, wherever the pointer is
+for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => { setPointer(e); mode?.up?.(pointer); });
 
 // ---- macropad (src/macropad.js) ----
 // The pad is a Bluetooth keyboard typing ← → Enter Space. A press switches to pad mode, where the round's selection stands in for the cursor;

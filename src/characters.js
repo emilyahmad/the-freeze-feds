@@ -399,7 +399,7 @@ export function makePerson(look) {
   const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.position.y = 0.01; shadow.renderOrder = -1; root.add(shadow);
   const hitbox = new THREE.Mesh(hitGeo, hitMat); root.add(hitbox);
 
-  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand, snowball, headFrame: hf, eyeY: ey };
+  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand, snowball, headFrame: hf, eyeY: ey, shadow };
   return root;
 }
 

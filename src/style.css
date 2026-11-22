@@ -16,6 +16,7 @@ body {
 #bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
 #gl.pointing { cursor: crosshair; }
 #gl.on-person { cursor: pointer; }
+#gl.grabbing { cursor: grabbing; }
 
 /* ---- HUD ---- */
 #hud { position: absolute; top: max(2.5%, env(safe-area-inset-top)); left: max(2%, env(safe-area-inset-left)); right: max(2%, env(safe-area-inset-right)); display: flex; gap: 10px; justify-content: center; pointer-events: none; }

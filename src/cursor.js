@@ -11,7 +11,7 @@ const TAIL_W = 30;                 // tail width at the hand, px (tapers to noth
 const TAIL_FROM = { x: 11, y: 24 };// where the tail leaves the hand, px from the fingertip (the back of the hand)
 const TILT_MAX = 18, TILT_K = 0.012, TILT_EASE = 10;   // lean: degrees max, degrees per px/s, easing rate
 const HOVER_SCALE = 1.12, PRESS_SCALE = 0.88;
-const CLICKABLE = 'button, a, [role="button"], .ph-scroll, #gl.on-person, #pf-freeze';
+const CLICKABLE = 'button, a, [role="button"], .ph-scroll, #gl.on-person, #gl.grabbing, #pf-freeze';
 
 // the glove: every shape is drawn three times (thick #E44023 stroke, thinner light tint, white fill)
 // so the outlines merge into one clean two-tone edge around the whole hand

@@ -53,6 +53,9 @@ export function wrong() { tone('square', 160, 90, 0.28, 0.12); }
 export function whoosh() { noise(0.45, 0.05, 1200); tone('sine', 220, 520, 0.45, 0.03); }
 export function splat() { tone('sine', 150, 45, 0.28, 0.3); noise(0.22, 0.14, 250); }
 /** Click each second of the last ten. */
+export function grab() { tone('sine', 420, 900, 0.14, 0.07); }        // picked up by the head
+export function drop() { tone('sine', 760, 320, 0.14, 0.06); }        // let go
+export function land() { tone('sine', 150, 60, 0.12, 0.12); }         // feet back on the ground
 export function tick() { tone('triangle', 1100, 1000, 0.06, 0.15); }
 /** Little fanfare at the end. */
 export function end(won) { (won ? [784, 988, 1175, 1568] : [523, 440, 349]).forEach((f, i) => tone('triangle', f, f, 0.22, 0.16, i * 0.13)); }

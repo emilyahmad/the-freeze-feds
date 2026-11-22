@@ -6,6 +6,19 @@ When we firsrt landed in SF, one of the biggest things we were looking forward t
 + an eye-spy game where you are traversing the streets of downtown SF (either through Google streetview or embedding a Youtube video). Every 5-8 seconds, they'd have to FREEZE and find something within the video frame -- an AI billboard, an undercover tech executive, a cable car; something SF-coded
 + our second idea was a "be elsa" simulator, a pose/gesture detection computer vision project where you can use different poses to generate snow figures on the screen, some abilities include: tracing with ice, generating blizzards by waving both palms towards the camera slowly, erecting icicles and snowmen by pumping your fists up, throwing snowballs at the screen, and much more.
 
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="design-references/i-spy.gif" alt="Early idea: I-spy game on the streets of SF" width="100%"></td>
+    <td align="center" width="33%"><img src="design-references/be-elsa.gif" alt="Early idea: Be Elsa simulator" width="100%"></td>
+    <td align="center" width="33%"><img src="design-references/be-elsa2.gif" alt="Early idea: Be Elsa simulator, continued" width="100%"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Idea 1: I-spy around downtown SF</sub></td>
+    <td align="center"><sub>Idea 2: Be Elsa simulator</sub></td>
+    <td align="center"><sub>Idea 2: Be Elsa simulator</sub></td>
+  </tr>
+</table>
+
 We left Notion and dilly daddled for quite a bit, then it hit 10 PM and we were all sitting in our hostel beds and we realized we have to narrow down on an idea and figure out what we're actually going to build over the next two days.
 
 We started throwing ideas around but we knew we wanted to keep certain elements from our original ideas, including throwing snowballs with pose detection, exploring the streets of SF, spotting tech execs

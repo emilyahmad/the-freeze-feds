@@ -6,6 +6,9 @@
 // Macropad / keyboard (pad(), see src/macropad.js): left/right move a selection through the people on screen in
 // left-to-right order (it starts on the leftmost and sticks to that person as they walk); select checks them or lets
 // them go; throw is the Freeze button (pressed again while the webcam is open, it throws straight away).
+// Carrying (design-references/dragging-by-head.jpg): press on someone's head and drag, and you pick them up by it and
+// carry them sideways and up/down at the depth they were standing at (crowd.grab / carryTo / drop); a press on the head that doesn't move DRAG_PX checks them
+// on release instead, like a click.
 import * as THREE from 'three';
 import { hud, popup, snowBurst, snowBack, clearSplats, wrongFlash } from '../ui.js';
 import * as sfx from '../sfx.js';
@@ -25,6 +28,9 @@ const FINALE_START = 0.5, VOLLEY_GAP = [0.55, 0.4], VOLLEY_BREAK = 0.9, FINALE_H
 
 let cam = null, noCam = false;   // one webcam panel for the page; noCam once the camera has failed to start
 const _v = new THREE.Vector3(), _ndc = new THREE.Vector2();
+const _plane = new THREE.Plane(), _zAxis = new THREE.Vector3(0, 0, 1), _hit = new THREE.Vector3();
+const DRAG_PX = 7;            // a press on someone's head that moves this far (px) picks them up instead of checking them
+const HEAD_SLOP = 6;          // how far below the bottom of the head (px) still counts as grabbing it
 const TOUCH_SLOP = [12, 24, 36];   // a tap that misses everyone tries rings this far out (px), nearest first: fingers are blunt
 
 export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
@@ -32,6 +38,7 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
   let timeLeft = time, caught = 0, wrong = 0, lastTick = 0, active = true;
   let checking = null, deciding = false, needPhoto = false, hovered = null, splatted = false;
   let selected = null, selectedAt = null;           // macropad selection, and where it last was on screen
+  let press = null, carrying = null, grabOff = null, lastP = null;   // a press on someone's head; who's being carried
   const frozen = [];
   let alive = true;                                  // false once the mode is stopped (finale timers check it)
   const timers = [], later = (secs, fn) => timers.push(setTimeout(() => { if (alive) fn(); }, secs * 1000));
@@ -137,6 +144,36 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
     }
   }
 
+  // ---- carrying by the head ----
+  /** Is stage point p on a's head (above the bottom of the head frame on screen)? */
+  function onHead(a, p) {
+    a.person.updateMatrixWorld(true);
+    return p.y < toScreen(a.person.userData.headFrame.getWorldPosition(_v)).y + HEAD_SLOP;
+  }
+  function grab(a, p) {
+    if (!crowd.grab(a)) return false;
+    carrying = a; const e = headOnScreen(a);
+    grabOff = { x: p.x - e.x, y: p.y - e.y };       // hold them by the spot that was grabbed, so they don't jump
+    sfx.grab(); carryTo(p);
+    return true;
+  }
+  /** Hang the carried person so their eyes sit under p (stage px, less the grab offset). They stay at the depth
+   *  they were picked up at: the cursor ray meets the upright plane at that depth, which gives x and the height. */
+  function carryTo(p) {
+    const a = carrying, { w, h } = size();
+    _ndc.set((p.x - grabOff.x) / w * 2 - 1, 1 - (p.y - grabOff.y) / h * 2);
+    raycaster.setFromCamera(_ndc, camera);
+    _plane.set(_zAxis, -a.hang.z);
+    if (!raycaster.ray.intersectPlane(_plane, _hit)) return;
+    crowd.carryTo(a, _hit, _hit.y - a.hangH);        // eyes at the hit point: feet hangH below it
+  }
+  function letGo() {
+    press = null;
+    if (!carrying) return;
+    crowd.drop(carrying); sfx.drop(); carrying = null;
+  }
+  crowd.onLand = () => sfx.land();
+
   // ---- macropad selection ----
   const EDGE = 0.03;                                 // people this close to the screen edge (share of width) aren't selectable
   /** Where `a` is on screen if they can be selected (on the street, in view, not frozen), else null. */
@@ -213,7 +250,7 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
 
   function end(won) {
     if (!active) return;
-    active = false; cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); hovered = null;
+    active = false; letGo(); cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); hovered = null;
     sfx.end(won); sfx.duckMurmur(false);
     const bosses = [...crowd.agents, ...crowd.retired].filter((a) => a.isCEO);   // incl. frozen ones already sent off
     const escaped = bosses.filter((a) => !a.frozen);
@@ -264,7 +301,7 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
 
     /** A macropad / keyboard button: 'left', 'right', 'select' or 'throw'. */
     pad(btn) {
-      if (!active) return;
+      if (!active || carrying) return;
       if (checking) {
         if (deciding) return;                                     // a stamp is already coming down
         if (btn === 'select') { selected = checking; releaseNow(null); }
@@ -276,6 +313,13 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
     },
 
     hover(pointer) {
+      if (carrying) {                               // carrying someone: they stay big-headed and outlined under the cursor
+        if (pointer) lastP = pointer;
+        if (lastP) carryTo(lastP);
+        if (carrying !== hovered) { crowd.setHighlight(hovered, false); crowd.setHighlight(carrying, true); hovered = carrying; }
+        crowd.setHover(carrying); canvas.className = 'grabbing'; showMarker(null);
+        return;
+      }
       let a = null;
       const pad = active && ctx.usingPad?.();
       if (pad) a = padTarget();                     // the macropad's selection stands in for the cursor
@@ -298,11 +342,26 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
         return;                              // clicking them again does nothing: the Freeze button throws the snowball
       }
       if (!a || a.frozen) return;
+      if (onHead(a, pointer)) { press = { a, x: pointer.x, y: pointer.y }; return; }   // drag to carry, or click to check
       startCheck(a);
+    },
+
+    move(pointer) {
+      if (!press || carrying || !active) return;
+      if (Math.hypot(pointer.x - press.x, pointer.y - press.y) < DRAG_PX) return;
+      const a = press.a; press = null;
+      if (!checking && !a.frozen && crowd.agents.includes(a)) grab(a, pointer);
+    },
+
+    up() {
+      if (carrying) { letGo(); return; }
+      const a = press?.a; press = null;
+      if (a && active && !checking && !a.frozen && !a.leaving && crowd.agents.includes(a)) startCheck(a);   // just a click on the head
     },
 
     /** Quit without a result (back to the home screen). */
     stop() {
+      letGo(); crowd.onLand = null;
       active = false; alive = false; marker.hidden = true; timers.forEach(clearTimeout); clearSplats(); sfx.duckMurmur(false); cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); },
   };
 }

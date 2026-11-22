@@ -87,7 +87,7 @@ export function snowBack(from, { text = '', far = false, size = 0, onImpact, onD
     }
     if (text) body.appendChild(Object.assign(document.createElement('div'), { className: 'splat-text', textContent: text }));
     stage.appendChild(splat);
-    stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
+    cameraShake(1);
     onImpact?.();
     const total = 120 + BACK_HOLD * 1000 + BACK_SLIDE * 1000, at = (ms) => ms / total;
     splat.animate([
@@ -124,6 +124,7 @@ function blob(stage, at, D, h, onImpact, onDone) {
       .style.cssText = `width:${s}%;height:${s}%;left:${20 + Math.random() * 60 - s / 2}%;top:${25 + Math.random() * 50}%`;
   }
   stage.appendChild(splat);
+  cameraShake(0.6);
   onImpact?.();
   const drop = h - at.y + D, total = 120 + BACK_HOLD * 1000 + BACK_SLIDE * 1000, t = (ms) => ms / total;
   splat.animate([
@@ -133,6 +134,22 @@ function blob(stage, at, D, h, onImpact, onDone) {
     { transform: `translateY(${D * 0.06}px) scale(1, 1.04)`, offset: t(120 + BACK_HOLD * 1000 + 300), easing: 'cubic-bezier(.4, 0, .9, .6)' },
     { transform: `translateY(${drop}px) scale(1, 1.04)`, offset: 1 },
   ], { duration: total, fill: 'forwards' }).onfinish = () => { splat.remove(); onDone?.(); };
+}
+
+/** A small decaying camera jolt when a snowball hits the screen: the whole stage jitters a few px in x/y with a hint of
+ *  roll, scaled up a touch so the edges never show. `k` scales it (1 = full-screen splat, less for a blob). */
+const SHAKE_PX = 7, SHAKE_ROLL = 0.5, SHAKE_MS = 380;   // peak offset (px), peak roll (deg), duration
+export function cameraShake(k = 1) {
+  const stage = $('#stage'), n = 9, frames = [];
+  const pad = 1 + (SHAKE_PX * k * 2.5) / Math.min(stage.clientWidth, stage.clientHeight);   // cover the shifted edges
+  for (let i = 0; i <= n; i++) {
+    const d = i === n ? 0 : (1 - i / n) ** 1.5 * k, sx = i % 2 ? 1 : -1;   // alternate sides, decaying
+    const x = sx * SHAKE_PX * d * (0.6 + Math.random() * 0.4), y = (Math.random() * 2 - 1) * SHAKE_PX * 0.7 * d;
+    const r = (Math.random() * 2 - 1) * SHAKE_ROLL * d, s = i === n ? 1 : pad;
+    frames.push({ transform: `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${r.toFixed(2)}deg) scale(${s.toFixed(4)})` });
+  }
+  stage.getAnimations().forEach((a) => a.id === 'shake' && a.cancel());
+  stage.animate(frames, { duration: SHAKE_MS * (0.7 + 0.3 * k), easing: 'ease-out', id: 'shake' });
 }
 
 /** Drop every snowball in flight or splatted on the screen at once (round restarted / mode stopped). */

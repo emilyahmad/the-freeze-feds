@@ -55,10 +55,20 @@ const THROW_TIME = 1.05, THROW_WIND = 0.12, THROW_TWIST = 0.35;   // WIND: lean 
 // off their heading, eased at HOVER_TURN_RATE /s) while they keep walking; their hitbox grows HOVER_HIT× taller
 // with the head so the cursor stays on them
 const HOVER_HEAD = 1.45, HOVER_HEAD_RATE = 16, HOVER_HIT = 1.12, HOVER_NECK = 1.5, HOVER_TURN_RATE = 9;
+// carrying (like grabbing a Mii in the Mii Channel / Plaza, design-references/dragging-by-head.jpg): the player drags
+// someone by the head (grab / carryTo / drop); they're lifted at least CARRY_LIFT m off the ground (up to
+// CARRY_LIFT_MAX when the cursor goes up; eased at LIFT_RATE /s), stay at the depth they were picked up at (only
+// sideways and up/down, never toward or away from the camera), follow the cursor (CARRY_EASE /s) and dangle from the head like a pendulum that swings back as they're moved
+// (SWING_K rad per m/s, capped at SWING_MAX; SWING_W stiffness, SWING_D damping), kicking their legs (KICK_RATE rad/s,
+// KICK_AMP) and waving; let go and they fall (DROP_G m/s²), wobble on landing and carry on from there
+export const CARRY_LIFT = 0.3, CARRY_LIFT_MAX = 1.4;
+const LIFT_RATE = 10, CARRY_EASE = 16, SWING_K = 0.16, SWING_MAX = 0.75, SWING_W = 45, SWING_D = 4.5;
+const KICK_RATE = 12, KICK_AMP = 0.6, DROP_G = 9.8;
 const GREET_DIST = 1.7, GREET_CHANCE = 0.5, GREET_CD = [6, 12];   // waving at passers-by
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const _hang = new THREE.Vector3();
 const angleLerp = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * Math.min(1, t); };
 
 export class Crowd {
@@ -69,7 +79,8 @@ export class Crowd {
 
   reset() {
     for (const a of this.agents) this.scene.remove(a.person);
-    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.hovered = null; this.lineup = null; resetFaceDeck(); resetProfileDeck();
+    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.hovered = null; this.lineup = null; resetFaceDeck();
+    if (this.carryShadow) this.carryShadow.visible = false; resetProfileDeck();
     for (let i = 0; i < NORMALS; i++) this.spawn(randomLook(), 'wander', false, true);
     for (const type of CEO_TYPES) {
       const ceo = this.spawn(ceoLook(type), type.behavior, true, true);
@@ -89,6 +100,7 @@ export class Crowd {
   /** Round over: everyone not frozen (or in `keep`) walks quickly off the nearer side of the photo and is then removed. */
   exit(keep = []) {
     for (const a of this.agents) {
+      if (a.carried) this.drop(a);
       if (a.frozen || keep.includes(a)) continue;
       if (a.group) this.leaveChat(a, false);
       a.inspect = null; a.onPresent = null; a.returning = false; a.entering = false; a.hurryT = 0;
@@ -105,6 +117,7 @@ export class Crowd {
     const c = this.area.at(LINE_X, LINE_Y), n = bosses.length;
     const order = [...bosses].sort((a, b) => a.person.position.x - b.person.position.x);   // keep left-to-right order: nobody crosses
     order.forEach((a, i) => {
+      if (a.carried) this.drop(a);
       if (a.group) this.leaveChat(a, false);
       Object.assign(a, { inspect: null, onPresent: null, returning: false, entering: false, hurryT: 0, pause: 0, pitchT: 0, stuckT: 0, lookAt: null });
       a.finale = 'walk'; a.lineT = 0; a.throwT = null;
@@ -221,7 +234,7 @@ export class Crowd {
   avoid(a, ux, uz, dist) {
     const p = a.person.position; let sx = 0, sz = 0;
     for (const o of this.agents) {
-      if (o === a || o === a.leader || o.leader === a) continue;
+      if (o === a || o === a.leader || o.leader === a || o.carried) continue;
       const rx = o.person.position.x - p.x, rz = o.person.position.z - p.z, d = Math.hypot(rx, rz);
       if (d < 1e-4 || d > LOOK_AHEAD || d > dist + RADIUS * 2) continue;      // ignore people beyond the target
       const ahead = (rx * ux + rz * uz) / d;
@@ -241,8 +254,10 @@ export class Crowd {
     for (let iter = 0; iter < 3; iter++) {
       for (let i = 0; i < n; i++) {
         const a = A[i], pa = a.person.position, ra = a.frozen ? ICE_RADIUS : RADIUS;
+        if (a.carried) continue;                                               // up in the air: nobody to bump into
         for (let j = i + 1; j < n; j++) {
           const b = A[j], pb = b.person.position, rb = b.frozen ? ICE_RADIUS : RADIUS;
+          if (b.carried) continue;
           let dx = pb.x - pa.x, dz = pb.z - pa.z, d = Math.hypot(dx, dz);
           const overlap = ra + rb - d;
           if (overlap <= 0 || (a.frozen && b.frozen)) continue;
@@ -257,7 +272,7 @@ export class Crowd {
       }
       // pushes can't shove people off the walk area, except off an ice block (clamping them back into the
       // ice would pin them there for good; they walk back in by themselves)
-      for (const a of A) if (!a.frozen && !a.onIce && !a.inspect && !a.returning && !a.entering && !a.leaving) this.area.clamp(a.person.position);
+      for (const a of A) if (!a.frozen && !a.carried && !a.onIce && !a.inspect && !a.returning && !a.entering && !a.leaving) this.area.clamp(a.person.position);
     }
   }
 
@@ -284,7 +299,7 @@ export class Crowd {
     const p = a.person.position;
     let best = null, bd = CHAT_RADIUS;
     for (const o of this.agents) {
-      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect || o.entering || o.leaving) continue;
+      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect || o.entering || o.leaving || o.carried) continue;
       if (o.group ? (o.group.members.length >= CHAT_MAX || o.group.t < 2) : o.socialCd > 2) continue;
       const d = o.person.position.distanceTo(p);
       if (d < bd) { bd = d; best = o; }
@@ -373,7 +388,7 @@ export class Crowd {
     if (a.greetCd > 0 || a.group || a.inspect || a.behavior !== 'wander' || !(a.speedNow > 0.1)) return;
     const p = a.person.position, fx = Math.sin(a.heading), fz = Math.cos(a.heading);
     for (const o of this.agents) {
-      if (o === a || o.frozen || o.group || o.inspect || o.greetCd > 0 || o.isCEO) continue;
+      if (o === a || o.frozen || o.group || o.inspect || o.greetCd > 0 || o.isCEO || o.carried) continue;
       const dx = o.person.position.x - p.x, dz = o.person.position.z - p.z, d = Math.hypot(dx, dz);
       if (d > GREET_DIST || (dx * fx + dz * fz) / d < 0.3) continue;
       a.greetCd = o.greetCd = rand(...GREET_CD);
@@ -428,6 +443,8 @@ export class Crowd {
         if (a.sendOff && (a.sendOff.t += dt / SENDOFF_TIME) > 0) this.sendOffStep(a, dt);
         continue;
       }
+      if (a.carried) { this.carryStep(a, dt); continue; }
+      if (person.position.y > 0) this.fallStep(a, dt);                          // just let go of: dropping back down
       a.mode = 'walk'; a.px = person.position.x; a.pz = person.position.z;
       if (a.hurryT > 0) a.hurryT -= dt;
       if (a.leaving) this.exitStep(a, dt);
@@ -460,7 +477,7 @@ export class Crowd {
           }
           a.pitchCd -= dt;
           if (a.pitchCd <= 0) {
-            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && !o.entering && !o.leaving && o.person.position.distanceTo(person.position) < 1.8);
+            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && !o.entering && !o.leaving && !o.carried && o.person.position.distanceTo(person.position) < 1.8);
             if (mark) {
               a.pitchTo = mark; a.pitchT = rand(2.5, 3.5); a.pitchCd = rand(4, 7);
               if (mark.behavior === 'wander' && !mark.group) mark.pause = a.pitchT;
@@ -522,10 +539,94 @@ export class Crowd {
     for (const a of this.agents) this.headZoomStep(a, dt);
     // stuck check: walking but barely getting anywhere (pinned against people or ice)
     for (const a of this.agents) {
-      if (a.frozen || a.px === undefined) continue;
+      if (a.frozen || a.carried || a.px === undefined) continue;
       const want = (a.speedNow || 0) * dt, got = Math.hypot(a.person.position.x - a.px, a.person.position.z - a.pz);
       a.stuckT = want > 0.002 && got < want * 0.35 ? a.stuckT + dt : Math.max(0, a.stuckT - dt);
     }
+  }
+
+  // ---- carrying ----
+
+  /** Pick someone up by the head. Returns false if they can't be carried (frozen, being checked, leaving, lined up). */
+  grab(a) {
+    if (a.carried || a.frozen || a.inspect || a.leaving || a.finale || a.gone) return false;
+    if (a.group) this.leaveChat(a, false);
+    a.entering = false;
+    Object.assign(a, { carried: true, pause: 0, pitchT: 0, returning: false, hurryT: 0, stuckT: 0, lookAt: null, fallV: 0, bumpT: 0,
+      lift: a.person.position.y, swingX: 0, swingZ: 0, swingVX: 0, swingVZ: 0 });
+    const p = a.person.position, ud = a.person.userData;
+    a.hang = new THREE.Vector3(p.x, 0, p.z);              // where the feet would be if they hung straight down
+    a.carryAt = a.hang.clone();                          // ...and where the cursor wants them (always at this depth)
+    a.liftTo = CARRY_LIFT;
+    a.person.rotation.set(0, a.heading, 0, 'ZXY');       // heading first, then the swing (about world x / z)
+    a.person.position.y = 0; a.person.updateMatrixWorld(true);
+    a.hangH = ud.headFrame.localToWorld(new THREE.Vector3(0, ud.eyeY, 0)).y;   // eye height: they hang from here
+    a.person.position.y = a.lift;
+    // the shadow stays on the ground under them (the person's own one would rise and swing with them)
+    if (!this.carryShadow) { this.carryShadow = ud.shadow.clone(); this.scene.add(this.carryShadow); }
+    ud.shadow.visible = false; this.carryShadow.visible = true;
+    this.carryShadow.position.set(p.x, 0.01, p.z);
+    return true;
+  }
+
+  /** Where the carried person should hang: feet (hanging straight down) over ground point p at their grab depth
+   *  (p.z is ignored), lifted `lift` m. Kept on the street by sliding x back toward where they are now. */
+  carryTo(a, p, lift = CARRY_LIFT) {
+    if (!a.carried) return;
+    const z = a.hang.z, ok = (x) => this.area.contains({ x, z });
+    let x = p.x;
+    if (!ok(x) && ok(a.hang.x)) {                        // bisect between the cursor's x and the (inside) current x
+      let lo = a.hang.x, hi = x;
+      for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; }
+      x = lo;
+    }
+    a.carryAt.set(x, 0, z);
+    a.liftTo = Math.max(CARRY_LIFT, Math.min(CARRY_LIFT_MAX, lift));
+  }
+
+  /** Let go: they drop from where they hang, then pick up their routine from the spot they landed on. */
+  drop(a) {
+    if (!a.carried) return;
+    a.carried = false; a.fallV = 0;
+    a.person.rotation.set(0, a.heading, 0, 'XYZ');
+    a.person.position.set(a.hang.x, Math.max(0.001, a.lift), a.hang.z);
+    a.person.userData.shadow.visible = true; if (this.carryShadow) this.carryShadow.visible = false;
+    a.waveT = 0; a.pause = rand(0.6, 1.2); a.stuckT = 0;
+    a.target = this.pickTarget(a); this.startBehavior(a);
+    a.socialCd = Math.max(a.socialCd, 3);
+  }
+
+  carryStep(a, dt) {
+    const person = a.person, h = a.hang, k = 1 - Math.exp(-CARRY_EASE * dt);
+    const ox = h.x, oz = h.z;
+    h.x += (a.carryAt.x - h.x) * k;                        // depth (z) stays put
+    a.lift += (a.liftTo - a.lift) * (1 - Math.exp(-LIFT_RATE * dt));
+    // pendulum: moving them swings the feet back the other way, then they settle
+    const vx = (h.x - ox) / dt, vz = (h.z - oz) / dt, cap = (v) => Math.max(-SWING_MAX, Math.min(SWING_MAX, v));
+    a.swingVZ += (SWING_W * (cap(-vx * SWING_K) - a.swingZ) - SWING_D * a.swingVZ) * dt; a.swingZ += a.swingVZ * dt;
+    a.swingVX += (SWING_W * (cap(vz * SWING_K) - a.swingX) - SWING_D * a.swingVX) * dt; a.swingX += a.swingVX * dt;
+    a.heading = angleLerp(a.heading, Math.atan2(-h.x, -h.z), dt * 6);      // turn to face the camera
+    a.speedNow = 0; a.waveT = Math.max(a.waveT, 0.2);                       // keep waving
+    this.updateFx(a, dt);
+    a.phase += dt * KICK_RATE; a.amp = KICK_AMP;                             // legs kicking
+    pose(person, a.phase, KICK_AMP, 'walk', this.time, a.fx);
+    const body = person.userData.rig.body; body.rotation.x = 0; body.rotation.y = 0; body.position.y = 0;
+    // hang from the eyes: rotate about them, so the head stays under the cursor while the body swings
+    person.rotation.set(a.swingX + Math.sin(this.time * 2.3 + a.fx.seed) * 0.03, a.heading, a.swingZ + Math.sin(this.time * 1.7 + a.fx.seed) * 0.04, 'ZXY');
+    const off = _hang.set(0, a.hangH, 0).applyEuler(person.rotation);
+    person.position.set(h.x, a.lift + a.hangH, h.z).sub(off);
+    this.carryShadow.position.set(h.x, 0.01, h.z);
+  }
+
+  /** Falling back down after being dropped; a little wobble on landing. */
+  fallStep(a, dt) {
+    const p = a.person.position;
+    a.fallV = (a.fallV || 0) - DROP_G * dt; p.y += a.fallV * dt;
+    if (p.y > 0) return;
+    p.y = 0; a.fallV = 0;
+    const t = Math.random() * Math.PI * 2;
+    a.bumpT = BUMP_TIME; a.bumpX = Math.sin(t); a.bumpZ = Math.cos(t); a.bumpAmt = 0.8;
+    this.onLand?.(a);
   }
 
   // ---- ID check ----
