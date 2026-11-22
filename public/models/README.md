@@ -21,3 +21,4 @@ Put character model files here. They're served at `./models/<file>` (for example
 - **Heads**: `head-01` … `head-08`, the face shapes. They all sit at the origin, overlapping, so show one at a time. The face points along +X.
 - **Hair**: `hair-01` … `hair-68`, overlapping at the origin like the heads and lined up to them. `hats.glb` has `cap` and `beanie`, which are textured.
 - The original OBJ/FBX/DAE files and the conversion scripts are in `../../model-sources/` (git-ignored, not served). To rebuild: in a folder with `assimpjs` and `@gltf-transform/*` installed, run `convert.mjs` (assimp → GLB), then `finalize.mjs` (renames nodes and embeds textures).
+- **Default hair** (`character-hair/hair-default.glb`): the fitted default Mii hair from `design-references/fixed_mii.glb`, baked into head-01's coordinates (92% scale, slight twist and lift, as fitted there). Rebuild with `model-sources/extract_hair.mjs <fixed_mii.glb> <out.glb>`.
