@@ -1,0 +1,9 @@
+<pre id=o>start</pre><script>window.onerror=(m)=>o.textContent+=' ERR '+m; window.onunhandledrejection=(e)=>o.textContent+=' REJ '+e.reason;</script>
+<script type=module>
+const o = document.getElementById('o'); o.textContent += ' mod';
+const { renderBabble } = await import('./sfx_copy.js'); o.textContent += ' imported';
+const t0 = performance.now();
+const b = await renderBabble(9.3, 1), d = b.getChannelData(0); o.textContent += ' rendered ' + Math.round(performance.now() - t0) + 'ms';
+let rms = 0, active = 0; for (const x of d) { rms += x * x; if (Math.abs(x) > 0.05) active++; }
+o.textContent += ` len ${b.duration.toFixed(2)} rms ${Math.sqrt(rms / d.length).toFixed(3)} active ${(active / d.length).toFixed(2)} seam ${Math.abs(d[0]).toFixed(3)}/${Math.abs(d[d.length-1]).toFixed(3)}`;
+</script>

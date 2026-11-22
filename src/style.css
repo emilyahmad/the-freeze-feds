@@ -80,8 +80,8 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
 /* ---- ID check: LinkedIn-style profile on a phone (after design-references/linkedin.png) ---- */
 /* sized from --sw (set in main.js: the window width, capped by its height) so it scales with the window */
 #profile {
-  position: absolute; left: 3.5%; top: 3%; width: 24em; z-index: 5; pointer-events: none;
-  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: calc(var(--sw, 1600px) * 0.0086); color: #e9e9ea;
+  position: absolute; left: 3.5%; top: 50%; translate: 0 -50%; width: 24em; z-index: 5; pointer-events: none;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: calc(var(--sw, 1600px) * 0.0098); color: #e9e9ea;
   animation: pp-in .45s cubic-bezier(.2, .9, .3, 1.15);
 }
 #profile.out { animation: pp-out .2s ease-in forwards; }

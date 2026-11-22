@@ -1,0 +1,4 @@
+<pre id=o>running</pre><script type=module>
+const oc = new OfflineAudioContext(1, 22050, 22050); const os = oc.createOscillator(); os.connect(oc.destination); os.start();
+const b = await oc.startRendering(); document.getElementById('o').textContent = 'done ' + b.length;
+</script>

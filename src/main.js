@@ -32,19 +32,42 @@ const card = new HoverCard(renderer, scene);
 const profile = new Profile(renderer, scene);
 
 // ---- layout: the stage fills the window; the photo is scaled to cover it (cropping the overflow, centred) and
-// the camera is given the same crop with setViewOffset, so the 3D people stay lined up with the photo ----
-let stageW = 0, stageH = 0, photoScale = 1, cropX = 0, cropY = 0;
+// the camera is given the same crop with setViewOffset, so the 3D people stay lined up with the photo.
+// Look-around: the photo is drawn LOOK_OVERSCAN bigger than needed, and the crop drifts toward the cursor
+// (photo and camera together, so they stay aligned), like a gentle head turn from the same spot. ----
+const LOOK_OVERSCAN = 1.05;   // extra photo scale that gives the crop room to drift
+const LOOK_EASE = 3;          // how quickly the view follows the cursor (1/s)
+let stageW = 0, stageH = 0, photoScale = 1, cropX = 0, cropY = 0, fullW = 0, fullH = 0;
+let lookOn = debug;           // held still during the intro zoom
+const look = { x: 0, y: 0, tx: 0, ty: 0 };   // current and target, −1..1 across the stage
 function layout() {
   stageW = innerWidth; stageH = innerHeight;
-  photoScale = Math.max(stageW / IMG_W, stageH / IMG_H);
-  const fullW = IMG_W * photoScale, fullH = IMG_H * photoScale;
-  cropX = (fullW - stageW) / 2; cropY = (fullH - stageH) / 2;
+  photoScale = Math.max(stageW / IMG_W, stageH / IMG_H) * LOOK_OVERSCAN;
+  fullW = IMG_W * photoScale; fullH = IMG_H * photoScale;
   Object.assign(stage.style, { width: stageW + 'px', height: stageH + 'px', left: '0px', top: '0px' });
-  Object.assign($('#photo').style, { width: fullW + 'px', height: fullH + 'px', left: -cropX + 'px', top: -cropY + 'px' });
-  camera.setViewOffset(fullW, fullH, cropX, cropY, stageW, stageH);
+  $('#photo').style.width = fullW + 'px'; $('#photo').style.height = fullH + 'px';
+  applyCrop();
   renderer.setSize(stageW, stageH);
   stage.style.setProperty('--sw', Math.min(stageW, stageH * IMG_W / IMG_H) + 'px');   // the profile phone scales with the window
 }
+function applyCrop() {
+  const mx = (fullW - stageW) / 2, my = (fullH - stageH) / 2;
+  cropX = mx * (1 + look.x); cropY = my * (1 + look.y);
+  $('#photo').style.left = -cropX + 'px'; $('#photo').style.top = -cropY + 'px';
+  camera.setViewOffset(fullW, fullH, cropX, cropY, stageW, stageH);
+}
+function updateLook(dt) {
+  if (!lookOn) { look.tx = look.ty = 0; }
+  const k = 1 - Math.exp(-LOOK_EASE * dt);
+  const dx = (look.tx - look.x) * k, dy = (look.ty - look.y) * k;
+  if (Math.abs(dx) + Math.abs(dy) < 1e-5) return;
+  look.x += dx; look.y += dy; applyCrop();
+}
+addEventListener('pointermove', (e) => {
+  look.tx = Math.max(-1, Math.min(1, e.clientX / innerWidth * 2 - 1));
+  look.ty = Math.max(-1, Math.min(1, e.clientY / innerHeight * 2 - 1));
+});
+document.documentElement.addEventListener('pointerleave', () => { look.tx = look.ty = 0; });
 addEventListener('resize', layout); layout();
 
 // ---- pointer ----
@@ -95,6 +118,8 @@ function overScreen(r) {
 
 $('#start').onclick = startFreeze;
 $('#restart').onclick = startFreeze;
+// browsers only allow audio after a gesture: the first click or key anywhere starts it (and the WALK tick, if it's showing)
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => sfx.unlock(), { once: true, capture: true });
 $('#sound').onclick = () => { $('#sound').textContent = sfx.toggleMute() ? '🔇' : '🔊'; };
 
 // ?debug skips the start screen; window.__game is for tuning from the console
@@ -120,6 +145,12 @@ function zoomPhoto(from, to, secs) {
   return anim.finished.then(() => anim);
 }
 async function intro() {
+  // browsers block audio until a gesture; if it's blocked, wait for one click first so the WALK tick plays on cue
+  if (!(await sfx.tryStart())) {
+    showScreen('tap-screen');
+    await new Promise((r) => { $('#tap').onclick = r; });
+    sfx.unlock(); showScreen(null);
+  }
   $('#photo').style.transformOrigin = '0 0';
   await sleep(INTRO.wait);
   const close = signalZoom(INTRO_ZOOM);
@@ -128,6 +159,7 @@ async function intro() {
   signal.walk();
   await sleep(INTRO.walk);
   (await zoomPhoto(close, 'none', INTRO.zoomOut)).cancel();   // back to normal; drop the animation so layout() owns the photo again
+  lookOn = true;
   await sleep(INTRO.beat);
   showScreen('start-screen');
 }
@@ -139,7 +171,11 @@ else intro();
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
+  updateLook(dt);
   if (!mode?.pauseCrowd) crowd.update(dt);   // the crowd keeps walking behind the menus too
+  // background chatter follows how many people have made it onto the street (not still walking in, not frozen)
+  const total = crowd.agents.length + crowd.retired.length;
+  sfx.crowdLevel(total ? crowd.agents.filter((a) => !a.entering && !a.frozen).length / total : 0);
   mode?.update(dt);
   if (!mode?.render?.()) renderer.render(scene, camera);
   if (mode) mode.hover(pointer);
