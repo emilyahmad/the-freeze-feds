@@ -26,9 +26,17 @@ const WALK_AREA = [[0, 405], [300, 398], [640, 400], [1060, 400], [1380, 398], [
 const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const ray = new THREE.Raycaster();
 
-/** Image pixel → point on the ground plane. */
+/** Image pixel → point on the ground plane. Uses the whole photo's view: main.js crops the camera to the window
+ *  with setViewOffset, so that crop is ignored here (a clean copy of the camera is kept per camera). */
+const fullViews = new WeakMap();
+const fullView = (camera) => {
+  let full = fullViews.get(camera);
+  if (!full) { full = camera.clone(); full.clearViewOffset(); fullViews.set(camera, full); }
+  return full;
+};
 export function imgToGround(camera, px, py) {
-  ray.setFromCamera(new THREE.Vector2(px / IMG_W * 2 - 1, 1 - py / IMG_H * 2), camera);
+  const full = fullView(camera);
+  ray.setFromCamera(new THREE.Vector2(px / IMG_W * 2 - 1, 1 - py / IMG_H * 2), full);
   const p = new THREE.Vector3();
   return ray.ray.intersectPlane(ground, p) ? p : null;
 }
@@ -72,6 +80,14 @@ export function buildWalkArea(camera) {
         if (inPoly(WALK_AREA, x, y)) { const p = imgToGround(camera, x, y); if (p) return p; }
       }
       return ground[ground.length - 1].clone().lerp(ground[ground.length - 2], 0.5);
+    },
+    /** A spot `margin` m past the left (side < 0) or right edge of the photo, level with `p` (an image row is a
+     *  line of constant depth on the ground, since the camera only pitches): where people walk in from. */
+    offscreen(p, side, margin = 1) {
+      const py = (1 - p.clone().project(fullView(camera)).y) / 2 * IMG_H;
+      const e = imgToGround(camera, side < 0 ? 0 : IMG_W, py) || p.clone();
+      e.x += side < 0 ? -margin : margin;
+      return e;
     },
     /** Random spot min..max metres away in any direction, inside the area (falls back to anywhere). */
     randomNear(from, min, max) {

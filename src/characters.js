@@ -107,7 +107,42 @@ const headStrapGeo = new THREE.TorusGeometry(0.3, 0.022, 6, 28);
 const scarfGeo = new THREE.TorusGeometry(0.1, 0.05, 8, 20);
 const scarfTailGeo = new THREE.BoxGeometry(0.08, 0.24, 0.035);
 const deviceGeo = new THREE.BoxGeometry(0.1, 0.07, 0.1);
-const gpuGeo = new THREE.BoxGeometry(0.26, 0.04, 0.14);
+// graphics card (after design-references/gpu.jpeg): card frame x = length, y = up (the shroud's top face), z = width
+const GPU_L = 0.32, GPU_W = 0.12;
+const gpuGeo = {
+  pcb: new THREE.BoxGeometry(GPU_L, 0.012, GPU_W),
+  fingers: new THREE.BoxGeometry(0.13, 0.008, 0.022),
+  shroud: new THREE.BoxGeometry(GPU_L - 0.016, 0.036, GPU_W - 0.006),
+  fins: new THREE.PlaneGeometry(0.15, 0.072).rotateX(-Math.PI / 2),
+  ring: new THREE.TorusGeometry(0.043, 0.0065, 8, 28).rotateX(Math.PI / 2),
+  fan: new THREE.CircleGeometry(0.04, 28).rotateX(-Math.PI / 2),
+  hub: new THREE.CylinderGeometry(0.017, 0.019, 0.01, 18),
+  bracket: new THREE.BoxGeometry(0.007, 0.07, GPU_W + 0.004),
+  strip: new THREE.BoxGeometry(GPU_L - 0.05, 0.006, 0.003),
+};
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+let gpuTex = null;   // built on first use (needs a document)
+function gpuTextures() {
+  return gpuTex ||= {
+    fins: canvasTex(256, 128, (g, w, h) => {          // heatsink fins running along the card
+      g.fillStyle = '#b4b9bf'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#5d6268'; for (let y = 3; y < h; y += 7) g.fillRect(0, y, w, 3);
+      g.strokeStyle = '#2a2a2e'; g.lineWidth = 6; g.strokeRect(0, 0, w, h);
+    }),
+    fan: canvasTex(256, 256, (g, w) => {              // blower: dark hub well with curved blades
+      const r = w / 2; g.fillStyle = '#18181c'; g.fillRect(0, 0, w, w);
+      g.translate(r, r); g.fillStyle = '#4a4d54';
+      for (let i = 0; i < 24; i++) {
+        g.rotate(Math.PI * 2 / 24);
+        g.beginPath(); g.moveTo(r * 0.4, -4); g.quadraticCurveTo(r * 0.7, -12, r * 0.98, -6); g.lineTo(r * 0.98, 4); g.quadraticCurveTo(r * 0.7, -2, r * 0.4, 4); g.fill();
+      }
+    }),
+  };
+}
 const canGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.13, 14);
 const cardboardGeo = new THREE.BoxGeometry(0.36, 0.26, 0.28);
 const tapeGeo = new THREE.BoxGeometry(0.37, 0.27, 0.06);
@@ -153,6 +188,16 @@ export function ceoLook(type) {
 export function assistantLook() {
   const look = { skin: pick(SKINS), hair: pick(HAIRS), hairStyle: 'short', hairModel: pick(HAIR_STYLES.short), head: pick(HEADS),
     face: { eyes: 'narrow', mouth: 'flat', nose: 'mid' }, pants: '#1c1c22', shirt: '#26262e', outfit: 'assistant', glasses: 'sun', earbuds: true };
+  // a crowd photo face too, with the photo's hair, but they keep the dark suit, shades and earpiece
+  const photo = nextCrowdFace();
+  if (photo) {
+    look.photo = photo;
+    if (photo.skin) look.skin = photo.skin;
+    if (photo.gender) look.gender = photo.gender;
+    const match = CROWD_LOOKS[photo.file];
+    if (match) Object.assign(look, { gender: match.gender, hairModel: match.hairModel, hair: match.hair });
+    if (photo.glasses) delete look.glasses;
+  }
   return look;
 }
 
@@ -186,6 +231,20 @@ const CROWD_LOOKS = {
   rando7: { gender: 'female', hairModel: 'hair-50', hair: '#46301f', shirt: '#a8c6df', pants: '#22304a', info: 'Light blue top, brown bob with bangs' },
   rando8: { gender: 'female', hairModel: 'hair-35', hair: '#8d867c', shirt: '#4069a0', pants: '#3b3b3b', info: 'Blue shirt, short grey hair, glasses' },
   rando9: { gender: 'female', hairModel: 'hair-60', hair: '#5a3a26', shirt: '#3a3338', pants: '#22304a', info: 'Dark top, brown hair pulled back, glasses' },
+  rando10: { gender: 'female', hairModel: 'hair-12', hair: '#2a1d16', shirt: '#f2b8c6', pants: '#e8e2d8', scale: 0.6, info: 'Pink onesie, tufty dark hair, toddler on the loose' },
+  rando11: { gender: 'female', hairModel: 'hair-42', hair: '#7a4426', shirt: '#d9d4c8', pants: '#3b3b46', info: 'Beige blouse, layered auburn hair, pearl earrings' },
+  rando12: { gender: 'male', hairModel: 'hair-31', hair: '#8a8580', shirt: '#eef0f4', collar: '#eef0f4', pants: '#3a3d48', info: 'White collar, receding grey hair, grey stubble' },
+  rando13: { gender: 'female', hairModel: 'hair-50', hair: '#141010', shirt: '#c89a3a', pants: '#2f3e5c', scale: 0.9, info: 'Mustard top, black bob with bangs' },
+  rando14: { gender: 'male', hairModel: 'hair-21', hair: '#3a2618', shirt: '#4a5a72', pants: '#2f3e5c', info: 'Slate tee, swept brown hair, big grin' },
+  rando15: { gender: 'female', hairModel: 'hair-35', hair: '#1e1814', jacket: '#d8322c', shirt: '#d8322c', pants: '#2f3442', info: 'Red jacket, short curly dark hair, pearl earrings' },
+  rando16: { gender: 'female', hairModel: 'hair-42', hair: '#151012', shirt: '#e8e4dc', pants: '#3b3b46', info: 'Cream top, wavy black shoulder-length hair' },
+  rando17: { gender: 'male', hairModel: 'hair-12', hair: '#1e1612', shirt: '#7a7880', pants: '#2f3e5c', info: 'Grey shirt, short dark hair' },
+  rando18: { gender: 'female', hairModel: 'hair-60', hair: '#5a3a24', shirt: '#d9a8a8', pants: '#3b3b46', info: 'Dusty-pink top, brown hair pulled back' },
+  rando19: { gender: 'male', hairModel: 'hair-22', hair: '#7a7064', shirt: '#e4e2dc', collar: '#e4e2dc', pants: '#4a4a52', info: 'White polo, shaggy greying hair' },
+  rando20: { gender: 'female', hairModel: 'hair-46', hair: '#3a2a22', shirt: '#7a2e3a', pants: '#22304a', info: 'Burgundy top, long dark hair, big hoop earrings' },
+  rando21: { gender: 'male', hairModel: 'hair-21', hair: '#2a1c14', shirt: '#1e1e24', pants: '#3b4a66', info: 'Black tee, short dark hair, megawatt smile' },
+  rando22: { gender: 'male', hat: 'beanie', hatColor: '#1c1c22', hair: '#1c1410', shirt: '#2a2a30', pants: '#3a3a40', info: 'Black beanie, full dark beard' },
+  rando23: { gender: 'male', hairModel: 'hair-21', hair: '#2a2420', jacket: '#4a4e56', shirt: '#5a6a80', collar: '#5a6a80', pants: '#2f3442', info: 'Charcoal jacket, swept-back dark hair' },
 };
 // the crowd draws photos from a shuffled deck (no repeats in a round); once it runs out, people keep Mii faces
 let faceDeck = [];
@@ -193,7 +252,13 @@ export function resetFaceDeck() {
   faceDeck = [...faces.crowd];
   for (let i = faceDeck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [faceDeck[i], faceDeck[j]] = [faceDeck[j], faceDeck[i]]; }
 }
-function takeCrowdFace(look) { usePhoto(look, faceDeck.pop()); }
+// every non-boss gets a photo: if the crowd ever outnumbers the photos, the deck is reshuffled and faces repeat
+// (add more pictures to design-references/remaining-faces/ to avoid that)
+function nextCrowdFace() {
+  if (!faceDeck.length && faces.crowd.length) resetFaceDeck();
+  return faceDeck.pop();
+}
+function takeCrowdFace(look) { usePhoto(look, nextCrowdFace()); }
 
 /** One-line description for the hover card. */
 export function describe(look) {
@@ -302,7 +367,21 @@ export function makePerson(look) {
   let phone = null;
   if (look.phone) { phone = part(phoneGeo, darkMat, handR, [0, -0.06, 0.06], 0); phone.rotation.x = -0.4; }
   if (look.carry === 'device') phone = part(deviceGeo, mat('#ffffff'), handR, [0, -0.06, 0.08]);
-  if (look.carry === 'gpu') { phone = part(gpuGeo, mat('#76b900'), handR, [0, -0.06, 0.09]); part(new THREE.BoxGeometry(0.2, 0.045, 0.1), darkMat, phone, [0, 0.005, 0], 0); }
+  if (look.carry === 'gpu') {
+    const tex = gpuTextures(), G = gpuGeo, silver = mat('#c9ced4'), x0 = -GPU_L / 2;
+    const texMat = (map) => { const m = mat('#ffffff'); m.map = map; return m; };
+    phone = new THREE.Group(); phone.position.set(0, -0.08, 0.06); phone.rotation.x = 2.4; phone.scale.setScalar(1.15); handR.add(phone);  // held out on the palm, fan side tilted toward the viewer
+    part(G.pcb, mat('#1f9e72'), phone, [0, -0.023, 0]);                                     // green board
+    part(G.fingers, mat('#e3a64a'), phone, [-0.03, -0.023, GPU_W / 2 + 0.01], 0);           // gold PCIe contacts (bottom edge as held)
+    part(G.shroud, mat('#232328'), phone, [0.008, 0.001, 0]);                               // black shroud
+    part(G.fins, texMat(tex.fins), phone, [x0 + 0.105, 0.0195, 0], 0);                     // heatsink window
+    const fx = x0 + 0.24;
+    part(G.fan, texMat(tex.fan), phone, [fx, 0.0195, 0], 0);                                // blower fan
+    part(G.ring, silver, phone, [fx, 0.02, 0], 0);
+    part(G.hub, mat('#eef0f2'), phone, [fx, 0.024, 0], 0);
+    part(G.bracket, silver, phone, [x0 - 0.002, -0.01, 0]);                                 // I/O bracket
+    part(G.strip, mat('#76b900'), phone, [0.02, 0.001, -GPU_W / 2 + 0.001], 0);             // green accent along the top edge
+  }
   if (look.carry === 'soda') phone = part(canGeo, mat('#c8202c'), handR, [0, -0.06, 0.07]);
   // two-hand props, held in front of the body
   let twoHand = false;
@@ -316,7 +395,7 @@ export function makePerson(look) {
   const shadow = new THREE.Mesh(shadowGeo, shadowMat); shadow.position.y = 0.01; shadow.renderOrder = -1; root.add(shadow);
   const hitbox = new THREE.Mesh(hitGeo, hitMat); root.add(hitbox);
 
-  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand };
+  root.userData = { rig: { body, ...mii.bones }, mats, outlineMat, setOutline, hitbox, look, handProp: !!phone, twoHand, headFrame: hf, eyeY: ey };
   return root;
 }
 

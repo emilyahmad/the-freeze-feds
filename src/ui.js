@@ -3,6 +3,9 @@ import * as THREE from 'three';
 const $ = (s) => document.querySelector(s);
 const PIC = 192;              // close-up render size (px)
 const CARD_LAYER = 1;         // the hovered person is put on this layer so the close-up shows only them
+const PHOTO_HEADS = 1.9;      // profile photo frame height, in head heights (smaller = tighter on the face)
+const PHOTO_DROP = 0.08;      // how far below the eyes the photo is aimed, as a fraction of the frame (head sits a bit high, like a headshot)
+const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 /** Hover card: renders a close-up of the hovered character with a second camera into a render target. */
 export class HoverCard {
@@ -65,7 +68,7 @@ export class HoverCard {
 export const hud = {
   show(on) { $('#hud').hidden = !on; },
   timer(t) { const el = $('#timer'); el.textContent = `⏱ ${Math.ceil(t)}`; el.classList.toggle('low', t <= 10); },
-  caught(n, of) { $('#caught').textContent = `❄ CEOs ${n} / ${of}`; },
+  caught(n, of) { $('#caught').textContent = `❄ Tech Execs ${n} / ${of}`; },
 };
 
 export function popup(x, y, text, kind) {
@@ -95,16 +98,46 @@ export function wrongFlash() {
 export function showScreen(id) { for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id; }
 
 // ---- ID check: LinkedIn-style profile ----
-const FIRST_M = ['Jun', 'Marco', 'Dev', 'Luis', 'Kenji', 'Omar', 'Theo', 'Sam', 'Ravi', 'Felix', 'Hugo', 'Malik', 'Ivan', 'Tomás', 'Ben', 'Chidi'];
-const FIRST_F = ['Ana', 'Mei', 'Priya', 'Sofia', 'Hana', 'Zoe', 'Lena', 'Ines', 'Maya', 'Ruth', 'Aiko', 'Nia', 'Clara', 'Yara', 'Eva', 'Ada'];
-const JOBS = ['Product Designer', 'Senior Software Engineer', 'Barista', 'ICU Nurse', 'Data Analyst', 'High School Teacher', 'UX Researcher', 'Line Cook',
-  'Account Executive', 'Bike Messenger', 'Product Manager', 'Muni Operator', 'Technical Recruiter', 'Paralegal', 'Dental Hygienist', 'Content Strategist'];
-const ORGS = ['Fog City Coffee', 'Cable Car Credit Union', 'UCSF Health', 'Mission Street Bakery', 'SFUSD', 'SFMTA', 'Bay Bytes', 'Nob Hill Dental',
-  'Golden Gate Analytics', 'Dolores Design Co.', 'Chinatown Noodle House', 'Presidio Labs'];
-const TAGS = ['Open to work', 'Dog parent 🐶', 'Building in public', 'Ultramarathoner 🏃', '#Hiring', 'Coffee snob ☕', 'Ex-startup', 'Opinions my own', 'Plant collector 🌿'];
-const SCHOOLS = ['SF State University', 'UC Berkeley', 'City College of San Francisco', 'UC Davis', 'Santa Clara University', 'USF'];
-const BANNERS = [['Let’s connect!', '#0a66c2', '#7fc1ff'], ['#OpenToWork', '#1b5e3b', '#57c785'], ['Coffee first ☕', '#6b3f2a', '#d79b6a'],
-  ['Always learning', '#3b2a7a', '#a58bf0'], ['We’re hiring!', '#8a1f3b', '#f07a8a'], ['Golden hour 🌉', '#9a4a1a', '#f2b45a']];
+// Every list is drawn from a per-round deck (resetProfileDeck(), called when the crowd resets), so no two
+// profiles in a round share a headline, school, banner, highlight or mutual connection. The pools are kept
+// disjoint from each other and from the bosses' fixed text, so a decoy never repeats a boss word for word.
+const FIRST_M = ['Jun', 'Marco', 'Dev', 'Luis', 'Kenji', 'Omar', 'Theo', 'Sam', 'Ravi', 'Felix', 'Hugo', 'Malik', 'Ivan', 'Tomás', 'Ben', 'Chidi',
+  'Arjun', 'Pablo', 'Yusuf', 'Leo', 'Kwame', 'Diego', 'Hiro', 'Nate',
+  'Mateo', 'Andre', 'Sven', 'Rafael', 'Kofi', 'Elijah', 'Tariq', 'Wen', 'Callum', 'Idris'];
+const FIRST_F = ['Ana', 'Mei', 'Priya', 'Sofia', 'Hana', 'Zoe', 'Lena', 'Ines', 'Maya', 'Ruth', 'Aiko', 'Nia', 'Clara', 'Yara', 'Eva', 'Ada',
+  'Leila', 'Rosa', 'Tess', 'Amara', 'Jia', 'Noor', 'Gwen', 'Paloma',
+  'Fatima', 'Ingrid', 'Keiko', 'Lucia', 'Simone', 'Thandi', 'Bea', 'Marisol', 'Nadia', 'Ottilie'];
+// Ordinary normals are cracked engineers and researchers: impressive tech jobs at made-up companies
+const JOBS = ['Staff Software Engineer', 'Founding Engineer', 'Research Scientist', 'Principal ML Engineer', 'Kernel Engineer', 'Compiler Engineer',
+  'Distributed Systems Engineer', 'Member of Technical Staff', 'Robotics Engineer', 'Security Researcher', 'Quant Developer', 'Infra Lead',
+  'Head of Applied AI', 'Chip Design Engineer', 'Rust Core Contributor', 'Site Reliability Lead', 'Computer Vision Lead', 'Database Internals Engineer',
+  'Inference Optimization Lead', 'Cryptography Engineer', 'Product Engineer', 'Autonomy Engineer', 'Founding Designer', 'Graphics Programmer'];
+const ORGS = ['Bay Bytes', 'Presidio Labs', 'SoMa Signal Labs', 'Golden Gate Compute', 'Twin Peaks Robotics', 'Fogline AI', 'Mission Silicon',
+  'Embarcadero Systems', 'Nob Hill Quant', 'Haight Labs', 'Dogpatch Dynamics', 'Potrero Photonics', 'Sutro Security', 'Marina ML',
+  'Castro Cloud', 'Russian Hill Research', 'Bernal Kernel Co.', 'Ocean Beach Orbital', 'Hayes Valley Hardware', 'Lands End Labs',
+  'Excelsior Inference', 'Cable Car Compute', 'Alamo Square AI', 'Treasure Island Thermonuclear'];
+const TAGS = ['IOI gold 🥇', 'ICPC World Finalist', 'NeurIPS oral ×2', 'Top 1% on Kaggle', '10k⭐ on GitHub', 'Ex-founding team (acquired)',
+  'Wrote the paper everyone cites', 'Shipped at 16', 'Putnam top 25', 'Linux kernel maintainer', 'IMO silver', 'Speedran a PhD in 3 years',
+  '#1 on Hacker News (4×)', 'Built a CPU in Minecraft', 'Reverse-engineered my car’s firmware', 'Codeforces Legendary Grandmaster',
+  'Hiring cracked engineers', '0 → 1 → 100M users', 'Patents: 11', 'Self-taught at 12', 'DEF CON CTF winner', 'Open-source maintainer (40M downloads)',
+  'Two-time Olympiad coach', 'Wrote my own OS for fun'];
+const SCHOOLS = ['MIT', 'Caltech', 'Carnegie Mellon University', 'UC Berkeley (EECS)', 'University of Waterloo', 'Georgia Tech', 'ETH Zürich',
+  'University of Toronto', 'IIT Bombay', 'Tsinghua University', 'University of Cambridge', 'Cornell University', 'University of Illinois Urbana-Champaign',
+  'Princeton University (PhD)', 'University of Oxford', 'EPFL', 'University of Michigan', 'KAIST', 'Technion', 'University of Washington (Allen School)',
+  'UT Austin', 'Imperial College London', 'Harvey Mudd College', 'Seoul National University'];
+const BANNERS = [['Ship it 🚢', '#0a66c2', '#7fc1ff'], ['Scaling laws enjoyer 📈', '#1b5e3b', '#57c785'], ['Compile, run, repeat ⚙️', '#3a3a3a', '#b0b0b0'],
+  ['Attention is all I need 🧠', '#3b2a7a', '#a58bf0'], ['We’re hiring cracked engineers', '#8a1f3b', '#f07a8a'], ['p99 under 5ms ⚡', '#0a3a5a', '#5ac0e0'],
+  ['sudo make it happen', '#1a1a1a', '#5af07a'], ['O(1) or bust', '#2a3a7a', '#7fa0f0'], ['Zero-downtime deploys only', '#1f4a2a', '#8fd19e'],
+  ['Hello, world 👋', '#4a1a4a', '#d07ad0'], ['git push --force (with lease)', '#5a3a1a', '#e0b07a'], ['Train big, ship small 🤖', '#2a4a3a', '#7ac0a0'],
+  ['Memory safe & proud 🦀', '#7a3a10', '#f2a65a'], ['Tokens per second 🔥', '#5a1a1a', '#e07a5a'], ['First-principles everything', '#1a3a4a', '#6ab0d0'],
+  ['10 GPUs, 1 dream', '#0a2a1a', '#5ad08a'], ['Build. Measure. Scale.', '#3a2a1a', '#d0a070'], ['Latency is a feature', '#1a2a5a', '#90a0f0'],
+  ['Open source forever 💛', '#4a3a0a', '#e0c050'], ['Robots, but nice 🦾', '#2a3a4a', '#c0d0e0'], ['Merge conflicts fear me', '#5a1a3a', '#f090b0'],
+  ['Bits to atoms 🔩', '#2a2a4a', '#9090d0'], ['Nights & weekends shipping', '#5a3a1a', '#f0c080'], ['Benchmarks don’t lie 📊', '#0a3a3a', '#3af0e0']];
+const HUSTLE_BANNERS = [['Building in stealth 🥷', '#111111', '#7a7a8a'], ['Series A in 9 days 💸', '#2a0a4a', '#c07af0'], ['$0 → $10M ARR', '#0a3a1a', '#5af07a'],
+  ['YC W-something 🟧', '#3b2a7a', '#ff9900'], ['Default alive ✅', '#0a2a4a', '#f0d05a'], ['We’re so back 🚀', '#1a1a1a', '#f2c14e'],
+  ['Profitable since month 3', '#4a0a0a', '#f05a5a'], ['Hiring founding engineers', '#0a0a3a', '#5a7af0'], ['Compute-rich, sleep-poor', '#3a2a0a', '#f0a03a'],
+  ['Acquired. Building again.', '#0a3a3a', '#3af0e0'], ['Hard tech only 🛰️', '#2a0a2a', '#f05af0'], ['Ramen profitable 🍜', '#1a1a2a', '#a0a0f0'],
+  ['Category creator 🦄', '#3a0a3a', '#f0a0f0'], ['Shipping daily since day 1', '#0a0a2a', '#d0d0f0']];
 // parody profiles for the bosses: hints in the headline, but no real names until they're frozen
 const BOSS = {
   holmes: { head: 'Founder & CEO @ OneDrop Labs | 200 tests from a single finger-prick 🩸 | Visionary', edu: 'Stanford University (left early)', followers: '1,204,118', banner: ['Change everything. One drop.', '#5b0f14', '#c7323c'], hl: 'Celebrating 10 years of stealth mode. Results coming soon.' },
@@ -112,7 +145,7 @@ const BOSS = {
   huang: { head: 'Founder & CEO @ a GPU company | The more you buy, the more you save 💚', edu: 'Stanford University · Oregon State', followers: '3,450,912', banner: ['Accelerated computing ⚡', '#0d2a0d', '#76b900'], hl: 'Gave a keynote in a leather jacket (again).' },
   thiel: { head: 'Contrarian investor | Competition is for losers ♟️ | Zero to One', edu: 'Stanford Law School', followers: '2,031,555', banner: ['What do you believe that nobody else does?', '#1d1d24', '#5a5a6a'], hl: 'Paid people to drop out of college.' },
   karp: { head: 'CEO @ Seeing-Stone Analytics | PhD, Social Theory | Software that wins 🪨', edu: 'Goethe University Frankfurt · Stanford Law', followers: '812,330', banner: ['We see everything 👁️', '#121a12', '#59613f'], hl: 'Did tai chi through an earnings call.' },
-  gates: { head: 'Co-chair @ a very big foundation | Retired software guy | Reading 50 books a year 📚', edu: 'Harvard University (dropped out)', followers: '36,912,004', banner: ['Clippy misses you 📎', '#0b3a6b', '#3aa0e8'], hl: 'Still answers to “have you tried turning it off and on again”.' },
+  gates: { head: 'Co-chair @ a very big foundation | Retired software guy | Reading 50 books a year 📚', edu: 'Harvard University (left to start a company)', followers: '36,912,004', banner: ['Clippy misses you 📎', '#0b3a6b', '#3aa0e8'], hl: 'Still answers to “have you tried turning it off and on again”.' },
   bezos: { head: 'Executive Chair @ an online bookstore 📦 | It’s always Day 1 | Rocket hobbyist', edu: 'Princeton University', followers: '8,240,661', banner: ['Your package has been delivered 📦', '#232f3e', '#ff9900'], hl: 'Went to space for 10 minutes. Thanked every customer.' },
   dimon: { head: 'Chairman & CEO @ a very large bank 🏦 | Fortress balance sheet', edu: 'Harvard Business School', followers: '5,118,207', banner: ['Too big to fail 🏛️', '#0b1f44', '#5b6d8e'], hl: 'Survived several crises (caused by other banks).' },
   buffett: { head: 'Chairman & CEO @ a holding company in Omaha | Be greedy when others are fearful 🥤', edu: 'Columbia Business School', followers: '4,690,233', banner: ['Buy and hold 🍔', '#2a1a10', '#9a2b2b'], hl: 'Celebrating 60 years at the same company.' },
@@ -121,23 +154,112 @@ const pickR = (a) => a[Math.floor(Math.random() * a.length)];
 const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const fmt = (n) => n.toLocaleString('en-US');
 
+// Decoy profiles for normal people: each one echoes a boss's hints (blood, headsets, GPUs, contrarianism,
+// foundations, packages, banks, Omaha…) so the profile alone can't be trusted, but never copies a boss's
+// text or another decoy's. Followers are [min, max].
+const DECOYS = [
+  // OneDrop-ish
+  { head: 'Founder & CEO @ Capillary Bio | Lab-on-a-chip blood panels 🩸 | Ex-Stanford bioengineering', edu: 'Stanford Bioengineering (PhD)', followers: [6000, 30000], banner: ['Every drop, sequenced 🩸', '#5b0f14', '#c7323c'], hl: 'Got FDA breakthrough designation for a 30-marker microfluidic panel.' },
+  { head: 'Microfluidics Engineer @ Mission Silicon | 1,000 assays on a postage stamp 🧪', edu: 'Johns Hopkins (Biomedical Engineering)', followers: [1500, 9000], banner: ['Tiny volumes, huge data', '#1d1d24', '#c7323c'], hl: 'Published in Nature at 24. Validated it in 3 independent labs.' },
+  // metaverse-ish
+  { head: 'XR Graphics Lead @ Haight Labs | Rendering at 120 fps per eye 🥽', edu: 'University of Utah (Graphics)', followers: [2000, 14000], banner: ['Presence is a frame budget 🥽', '#123a8a', '#5d8df5'], hl: 'Cut headset motion-to-photon latency to 9 ms.' },
+  { head: 'Founder @ a social VR startup (2M MAU) | BJJ purple belt 🥋 | Moving fast', edu: 'Harvard (CS, left junior year)', followers: [8000, 40000], banner: ['Everyone, connected 🌐', '#123a8a', '#3b2a7a'], hl: 'Scaled from dorm room to 2M monthly users in 14 months.' },
+  // GPU-ish
+  { head: 'CUDA Kernel Engineer | Made attention 3× faster 💚 | The more you fuse, the more you save', edu: 'Oregon State University (ECE)', followers: [3000, 20000], banner: ['Kernels go brrr ⚡', '#0d2a0d', '#76b900'], hl: 'Wrote a fused kernel now running on half the world’s inference clusters.' },
+  { head: 'GPU Cluster Architect @ Golden Gate Compute | 100k accelerators, zero downtime 🖥️', edu: 'National Taiwan University', followers: [2500, 12000], banner: ['Accelerate everything 💚', '#2a1a10', '#76b900'], hl: 'Brought a 100k-GPU cluster online in 41 days. Wore a leather jacket to the launch.' },
+  // contrarian / Zero-to-One-ish
+  { head: 'Contrarian seed investor ♟️ | Backed 3 unicorns before Series A', edu: 'Stanford (Philosophy)', followers: [10000, 60000], banner: ['Monopolies, not competition ♟️', '#1d1d24', '#5a5a6a'], hl: 'Dropped out at 19 with a fellowship. Now has two exits.' },
+  { head: 'Chess engine author | 3500 Elo bot in 2k lines of C ♟️ | Zero to one', edu: 'Stanford Law School (JD/MS CS)', followers: [1200, 8000], banner: ['Search deeper ♟️', '#1d1d24', '#6b3f2a'], hl: 'My engine beat the reigning champion engine at the TCEC superfinal.' },
+  // seeing-stone-ish
+  { head: 'Data Fusion Lead @ Sutro Security | PhD, Social Theory → ML 🪨 | Ontologies at scale', edu: 'Goethe University Frankfurt (PhD)', followers: [2000, 10000], banner: ['One graph to see it all 🪨', '#121a12', '#59613f'], hl: 'Built an ontology serving 40 agencies in real time.' },
+  { head: 'Forward Deployed Engineer | Ships to the field in 72 hours 👁️ | Tai chi daily', edu: 'West Point (Computer Science)', followers: [800, 5000], banner: ['Deployed, not demoed 👁️', '#121a12', '#2f3e5c'], hl: 'Shipped a sensor-fusion pipeline from a tent with no Wi-Fi.' },
+  // foundation / reading-ish
+  { head: 'Global Health ML Lead @ a big philanthropy | Malaria forecasting 🦟 | Reads 60 books a year', edu: 'Harvard (Applied Math, dropped out)', followers: [5000, 25000], banner: ['Code that saves lives 📚', '#0b3a6b', '#3aa0e8'], hl: 'Our model routed bed nets to 12M people a season ahead.' },
+  { head: 'OS Kernel Veteran → OS Researcher 💻 | Wrote my first compiler at 13', edu: 'University of Washington (PhD, OS)', followers: [3000, 15000], banner: ['Blue screens, never again 🔁', '#0b3a6b', '#5d8df5'], hl: 'Shipped a scheduler fix now running on a billion PCs.' },
+  // bookstore / packages-ish
+  { head: 'Logistics Optimization Lead | Same-day delivery for 40M packages 📦 | Always Day 1', edu: 'Princeton (Operations Research)', followers: [2500, 14000], banner: ['Routes solved, boxes moved 🚚', '#232f3e', '#ff9900'], hl: 'Cut last-mile cost 23% with a solver I wrote over a weekend.' },
+  { head: 'Propulsion Engineer @ Ocean Beach Orbital 🚀 | Reusable boosters | Bald by choice', edu: 'Purdue (Aerospace)', followers: [4000, 22000], banner: ['Land it, fly it again 🚀', '#232f3e', '#9a4a1a'], hl: 'Designed the engine on our first booster to land and refly.' },
+  // bank-ish
+  { head: 'Head of Quant Risk @ a very large bank 🏦 | Stress-testing the fortress', edu: 'Harvard Business School (MBA) · MIT (Math)', followers: [3000, 16000], banner: ['Risk-adjusted everything 🏛️', '#0b1f44', '#5b6d8e'], hl: 'My model flagged the 2023 regional-bank run three weeks early.' },
+  { head: 'Low-latency Trading Engineer | FPGA order books in 80 ns 🏦', edu: 'Columbia (Financial Engineering)', followers: [1500, 9000], banner: ['Nanoseconds are money 💹', '#0b1f44', '#f07a8a'], hl: 'Shaved 300 ns off the order path. Bonus had more zeros than the latency.' },
+  // Omaha-ish
+  { head: 'Value investor in deep tech | Omaha born 🌽 | Compounding at 31% since 2014', edu: 'Creighton University (Finance) · CFA', followers: [7000, 35000], banner: ['Moats, measured 🌽', '#2a1a10', '#9a2b2b'], hl: 'Bought a chip-tooling stock at 4× earnings. It 40×’d.' },
+  { head: 'Founder @ a fintech for Main Street investors 🥤 | Never misses the annual meeting in Omaha', edu: 'University of Nebraska–Lincoln (CS)', followers: [4000, 20000], banner: ['Long-term greedy 🍔', '#9a2b2b', '#f2b45a'], hl: 'Hit 1M funded accounts without spending a dollar on ads.' },
+];
+// Cracked founders: absurdly impressive, but harmless
+const HUSTLE = [
+  'Founder & CEO @ Fogline AI | 2× founder (1 exit) | Building agents that write agents 🤖',
+  'Co-founder & CTO @ Dogpatch Dynamics | Humanoid robots in 400 warehouses 🦾',
+  'Founder @ Potrero Photonics | Optical interconnects for AI clusters | $120M Series B',
+  'CEO @ Sutro Security | Raised a $30M seed at 21 | Ex-IOI gold',
+  'Founder @ Mission Silicon | Taped out a 3nm chip with 11 people 🔬',
+  'Solo founder | $4M ARR, 0 employees, 1 laptop 💻',
+  'Founder @ Lands End Labs | Fusion-powered data centers ⚛️ | Hiring physicists',
+  'Co-founder @ Castro Cloud | Serverless GPUs, 50k customers ☁️ | YC alum',
+  'Founder & CEO @ Alamo Square AI | 1B tokens/day, profitable 📈',
+  'Founder @ Nob Hill Quant | Turned a Discord bot into a $200M fund',
+  '3× founder, 2 exits | Now building orbital manufacturing 🛰️',
+  'Founder @ Bernal Kernel Co. | Rewrote the Linux network stack in Rust 🦀 | $45M raised',
+  'CEO @ Excelsior Inference | Inference chips 10× cheaper per token ⚡',
+  'Founder @ Hayes Valley Hardware | Brain-computer interfaces, FDA cleared 🧠',
+];
+const HUSTLE_EDU = ['Stanford (CS, dropped out)', 'MIT (left to found)', 'Y Combinator', 'Waterloo (co-op ×6, then left)', 'Caltech (Physics PhD, ABD)',
+  'CMU (dropped out sophomore year)', 'Berkeley (EECS, 2 years)', 'Self-taught · IOI team', 'Oxford (Rhodes Scholar)', 'Cambridge (Part III Maths)',
+  'Princeton (dropped out to build)', 'Georgia Tech (BS in 2 years)', 'Homeschooled · arXiv at 15', 'South Park Commons'];
+const HUSTLE_HL = ['Raised a $50M Series A on a 4-slide deck.', 'Hit $1M ARR 63 days after launch.', 'Acquired for nine figures. Back to building the next day.',
+  'Shipped v1 in a weekend. Signed 3 Fortune 500s on Monday.', 'Named to Forbes 30 Under 30 (at 22).', 'Grew from 0 to 5M users with no marketing spend.',
+  'Open-sourced our core. 80k GitHub stars in a month.', 'Turned down a $1B acquisition offer.', 'Profitable in month 4. Never raised again.',
+  'Hired 40 engineers, all ex-olympiad.', 'Landed a booster on the first try.', 'Our chip came back from the fab working on first silicon.',
+  'Closed the round in 48 hours, 9× oversubscribed.', 'Gave the opening keynote at the biggest AI conference of the year.'];
+// Ordinary normals get impressive highlights
+const HL = ['Celebrating {y} at a company I joined as employee #4.', 'Promoted twice in 18 months.', 'My PR cut our cloud bill by $3M a year.',
+  'Rewrote the build system. CI went from 40 min to 90 s.', 'Paper accepted as a NeurIPS oral.', 'Took our p99 latency from 900 ms to 12 ms.',
+  'Found a zero-day in a major browser. Got a $250k bounty.', 'Trained a model that beat the state of the art on 7 benchmarks.',
+  'Migrated 2 PB to a new database with zero downtime.', 'Shipped a feature used by 300M people.', 'Won the company hackathon 3 years running.',
+  'Invited to speak at the biggest systems conference.', 'Our open-source library crossed 1M weekly downloads.', 'Built the robot arm’s control stack from scratch.',
+  'Designed the cache that serves 40M requests a second.', 'Filed 3 patents this year.', 'Got a 4-line patch merged into the Linux kernel.',
+  'Solved a 20-year-old open problem in compilers.', 'Taught a robot to fold laundry. Finally.', 'Optimized inference 6× on the same hardware.',
+  'Mentored 12 interns, all got return offers.', 'Hit #1 on Hacker News with a weekend project.', 'Led the team that taped out our first chip.',
+  'Recognized as a Top Engineer at a 10,000-person company.'];
+
+// per-round deck: draw() hands out each entry of a list at most once until resetProfileDeck() (or until it runs dry)
+let used = new Map();
+export function resetProfileDeck() { used = new Map(); }
+const usedFor = (list) => { if (!used.has(list)) used.set(list, new Set()); return used.get(list); };
+const hasLeft = (list) => usedFor(list).size < list.length;
+function draw(list) {
+  const u = usedFor(list);
+  if (u.size >= list.length) u.clear();
+  const free = list.filter((x) => !u.has(x)), x = pickR(free);
+  u.add(x); return x;
+}
+
 /** Made-up profile for an agent (kept on the agent so re-checking someone shows the same profile).
- *  No names on the profile: a boss's real name only shows on the FROZEN stamp. */
+ *  No names on the profile: a boss's real name only shows on the FROZEN stamp.
+ *  Normals: ~40% are decoys that echo a boss's hints, ~20% cracked founders, the rest cracked engineers. */
 export function profileFor(agent) {
   if (!agent.profile) {
     const look = agent.person.userData.look, boss = BOSS[look.ceoId];
-    const grand = !boss && Math.random() < 0.15;      // decoys: some normals are hustle-posting founders too
-    const years = randInt(1, 9);
-    agent.profile = {
-      headline: boss ? boss.head : grand ? `Founder & CEO @ a stealth startup 🚀 | ${randInt(2, 4)}x founder | Disrupting ${pickR(['coffee', 'laundry', 'parking', 'burritos', 'dog walking'])}`
-        : `${pickR(JOBS)} @ ${pickR(ORGS)}${Math.random() < 0.6 ? ' | ' + pickR(TAGS) : ''}`,
-      edu: boss ? boss.edu : pickR(SCHOOLS),
-      followers: boss ? boss.followers : fmt(grand ? randInt(8000, 40000) : randInt(40, 2400)),
-      conn: boss || grand || Math.random() < 0.3 ? '500+ connections' : `${randInt(30, 480)} connections`,
-      mutual: `${pickR(FIRST_F)}, ${pickR(FIRST_M)} and ${randInt(2, 60)} other mutual connections`,
-      banner: boss ? boss.banner : pickR(BANNERS),
-      hl: boss ? boss.hl : `Celebrating ${years} year${years > 1 ? 's' : ''} at work.`,
+    const roll = Math.random();
+    const decoy = !boss && roll < 0.4 && hasLeft(DECOYS) && draw(DECOYS);
+    const grand = !boss && !decoy && roll < 0.6 && hasLeft(HUSTLE);
+    const years = randInt(1, 9), job = !boss && !decoy && !grand ? draw(JOBS) : '';
+    const big = boss || grand || (decoy && decoy.followers[1] > 3000);
+    agent.profile = boss ? {
+      headline: boss.head, edu: boss.edu, followers: boss.followers, banner: boss.banner, hl: boss.hl,
+      conn: '500+ connections',
+    } : decoy ? {
+      headline: decoy.head, edu: decoy.edu, followers: fmt(randInt(...decoy.followers)), banner: decoy.banner, hl: decoy.hl,
+    } : grand ? {
+      headline: draw(HUSTLE), edu: draw(HUSTLE_EDU),
+      followers: fmt(randInt(20000, 250000)), banner: draw(HUSTLE_BANNERS), hl: draw(HUSTLE_HL),
+    } : {
+      headline: `${job} @ ${draw(ORGS)}${Math.random() < 0.6 ? ' | ' + draw(TAGS) : ''}`, edu: draw(SCHOOLS),
+      followers: fmt(randInt(800, 15000)), banner: draw(BANNERS),
+      hl: draw(HL).replace('{y}', `${years} year${years > 1 ? 's' : ''}`).replace('{job}', job),
     };
+    agent.profile.conn ??= big || Math.random() < 0.3 ? '500+ connections' : `${randInt(30, 480)} connections`;
+    agent.profile.mutual = `${draw(FIRST_F)}, ${draw(FIRST_M)} and ${randInt(2, 60)} other mutual connections`;
   }
   return agent.profile;
 }
@@ -173,12 +295,19 @@ export class Profile {
     void this.el.offsetWidth;                       // restart the slide-in animation
   }
 
-  /** Profile photo: a straight-on head-and-shoulders render of the agent, on their own layer. */
+  /** Profile photo: a straight-on head-and-shoulders render of the agent, on their own layer.
+   *  Framed on the agent's actual head (so kids, tall heads and broad faces all sit centred), not a fixed height. */
   photo() {
     const a = this.agent; if (!a) return;
-    const p = a.person.position, h = a.person.rotation.y;
-    this.cam.position.set(p.x + Math.sin(h) * 1.7, 1.24, p.z + Math.cos(h) * 1.7);
-    this.cam.lookAt(p.x, 1.2, p.z);
+    const { headFrame, eyeY } = a.person.userData, h = a.person.rotation.y;
+    a.person.updateMatrixWorld(true);
+    const eye = headFrame.localToWorld(_v.set(0, eyeY, 0));                 // eye line, mid-head
+    const headH = eye.distanceTo(headFrame.localToWorld(_w.set(0, 0, 0))) * 2;   // neck → crown, in metres
+    const viewH = headH * PHOTO_HEADS;                                       // frame height, in heads
+    const dist = viewH / 2 / Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2));
+    const aim = eye.clone(); aim.y -= viewH * PHOTO_DROP;                    // aim a little below the eyes: head high, shoulders below
+    this.cam.position.set(aim.x + Math.sin(h) * dist, aim.y + dist * 0.03, aim.z + Math.cos(h) * dist);
+    this.cam.lookAt(aim);
     a.person.traverse((o) => o.layers.enable(CARD_LAYER));
     const r = this.renderer, prevAlpha = r.getClearAlpha(), prevColor = r.getClearColor(new THREE.Color());
     r.setRenderTarget(this.rt); r.setClearColor(0xe9e5f2, 1); r.clear(); r.render(this.scene, this.cam);
@@ -203,8 +332,9 @@ export class Profile {
     clearTimeout(this.hideTimer);
     this.hideTimer = setTimeout(() => {
       this.el.classList.add('out');
-      this.hideTimer = setTimeout(() => { this.el.hidden = true; this.el.classList.remove('out'); }, 350);
+      this.hideTimer = setTimeout(() => { this.el.hidden = true; this.el.classList.remove('out'); }, 200);
     }, delay * 1000);
     this.agent = null;
   }
 }
+

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { resetProfileDeck } from './ui.js';
 import { makePerson, randomLook, ceoLook, assistantLook, describe, pose, encase, resetFaceDeck, CEO_TYPES, HIGHLIGHT } from './characters.js';
 
 export const NORMALS = 20;
@@ -27,9 +28,16 @@ const LAUGH_CHANCE = 0.3, NOD_CHANCE = 0.55;   // per speaking turn, for the lis
 // ID check: the clicked person walks up to this spot near the camera (world metres; the camera is at the
 // origin looking down −z) and faces it; INSPECT_SPEED is a brisk "yes officer?" walk
 const INSPECT_SPOT = new THREE.Vector3(0.9, 0, -2.2), INSPECT_SPEED = 2.6;
+// released people walk RELEASE_SPEEDUP× faster for RELEASE_HURRY s, so they clear the front of the street quickly
+const RELEASE_SPEEDUP = 2.5, RELEASE_HURRY = 2.2;
+// released people stay marked (design-references/released-mii-outline.png): washed green, with a mint outline
+const RELEASED_TINT = new THREE.Color('#3f8a5e'), RELEASED_TINT_AMT = 0.5, RELEASED_OUTLINE = 0x6fd1b6;
 // send-off: a frozen boss's ice block slides away down the street, spinning gently, and fades out over the
 // second half of the trip; then it's taken out of the scene
 const SENDOFF_TIME = 6, SENDOFF_DIST = 30, SENDOFF_SPIN = 0.7, FADE_FROM = 0.45;
+// entrance: at the start of a round everyone walks in from just past the left or right edge of the photo
+// (ENTER_MARGIN m out, at a random depth), staggered by up to ENTER_SPREAD s, a little brisker than usual
+const ENTER_MARGIN = [0.6, 2.5], ENTER_SPREAD = 4, ENTER_SPEEDUP = 1.3;
 const GREET_DIST = 1.7, GREET_CHANCE = 0.5, GREET_CD = [6, 12];   // waving at passers-by
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -38,28 +46,30 @@ const angleLerp = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2) + Ma
 
 export class Crowd {
   constructor(scene, area) {
-    this.scene = scene; this.area = area; this.agents = []; this.hitboxes = []; this.groups = []; this.time = 0;
-    this.reset();
+    this.scene = scene; this.area = area; this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.time = 0;
+    this.ceoCount = CEO_TYPES.length;   // the street starts empty: reset() (at the start of a round) brings everyone in
   }
 
   reset() {
     for (const a of this.agents) this.scene.remove(a.person);
-    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; resetFaceDeck();
-    for (let i = 0; i < NORMALS; i++) this.spawn(randomLook(), 'wander', false);
+    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; resetFaceDeck(); resetProfileDeck();
+    for (let i = 0; i < NORMALS; i++) this.spawn(randomLook(), 'wander', false, true);
     for (const type of CEO_TYPES) {
-      const ceo = this.spawn(ceoLook(type), type.behavior, true);
+      const ceo = this.spawn(ceoLook(type), type.behavior, true, true);
       if (type.behavior === 'lead') {          // two assistants flank the CEO
         for (const side of [-1, 1]) {
           const f = this.spawn(assistantLook(), 'follow', false);
           f.leader = ceo; f.offset = new THREE.Vector3(side * 0.75, 0, -0.45);
-          this.area.clamp(f.person.position.copy(ceo.person.position).add(f.offset));
+          f.person.position.copy(ceo.person.position).add(f.offset);
+          if (ceo.entering) f.entering = true; else this.area.clamp(f.person.position);
         }
       }
     }
     this.ceoCount = CEO_TYPES.length;
   }
 
-  spawn(look, behavior, isCEO) {
+  /** Add someone. With `enter` they start off the side of the photo and walk in (see enterStep). */
+  spawn(look, behavior, isCEO, enter = false) {
     const person = makePerson(look);
     person.position.copy(this.area.randomPoint());
     const a = {
@@ -73,14 +83,31 @@ export class Crowd {
       fx: { talk: 0, wave: 0, nod: 0, laugh: 0, yaw: 0, hand: Math.random() < 0.5 ? -1 : 1, seed: Math.random() * 10 },
     };
     a.target = this.pickTarget(a);
-    if (behavior === 'pace') {                 // pace back and forth between two spots a few metres apart
-      a.paceA = person.position.clone(); a.paceB = this.area.randomNear(a.paceA, 2, 3.2);
-      a.target = a.paceB;
-    }
+    if (enter) {                               // walk in from the nearer-ish side, to a spot inside the street
+      const side = Math.random() < 0.5 ? -1 : 1;
+      person.position.copy(this.area.offscreen(person.position, side, rand(...ENTER_MARGIN)));
+      a.entering = true; a.enterDelay = rand(0, ENTER_SPREAD); a.target = this.area.randomPoint();
+      a.heading = side < 0 ? Math.PI / 2 : -Math.PI / 2;                     // facing into the street
+    } else this.startBehavior(a);
     person.userData.hitbox.userData.agent = a;
     person.rotation.y = a.heading;
     this.scene.add(person); this.agents.push(a); this.hitboxes.push(person.userData.hitbox);
     return a;
+  }
+
+  /** Behaviour setup once someone is on the street. */
+  startBehavior(a) {
+    if (a.behavior === 'pace') {               // pace back and forth between two spots a few metres apart
+      a.paceA = a.person.position.clone(); a.paceB = this.area.randomNear(a.paceA, 2, 3.2);
+      a.target = a.paceB;
+    }
+  }
+
+  /** Walking onto the street: wait out the stagger, then head for the first spot; done once well inside. */
+  enterStep(a, dt) {
+    if (a.enterDelay > 0) { a.enterDelay -= dt; a.speedNow = 0; return; }
+    const speed = (a.behavior === 'speed' ? SPEED_WALKER : (a.walkSpeed ??= rand(0.85, 1.25) * WALK_SPEED)) * ENTER_SPEEDUP;
+    if (this.move(a, speed, dt)) a.target = this.area.randomPoint();
   }
 
   /** A new place to walk to: usually somewhere close by in a random direction, sometimes anywhere. */
@@ -99,6 +126,7 @@ export class Crowd {
     let ux = dx / dist, uz = dz / dist;
     const [sx, sz] = this.avoid(a, ux, uz, dist);
     ux += sx; uz += sz; const n = Math.hypot(ux, uz) || 1; ux /= n; uz /= n;
+    if (a.hurryT > 0) speed *= RELEASE_SPEEDUP;
     const step = Math.min(dist, speed * dt);
     p.x += ux * step; p.z += uz * step;
     a.speedNow = step / dt;
@@ -146,7 +174,7 @@ export class Crowd {
       }
       // pushes can't shove people off the walk area, except off an ice block (clamping them back into the
       // ice would pin them there for good; they walk back in by themselves)
-      for (const a of A) if (!a.frozen && !a.onIce && !a.inspect && !a.returning) this.area.clamp(a.person.position);
+      for (const a of A) if (!a.frozen && !a.onIce && !a.inspect && !a.returning && !a.entering) this.area.clamp(a.person.position);
     }
   }
 
@@ -173,7 +201,7 @@ export class Crowd {
     const p = a.person.position;
     let best = null, bd = CHAT_RADIUS;
     for (const o of this.agents) {
-      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect) continue;
+      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect || o.entering) continue;
       if (o.group ? (o.group.members.length >= CHAT_MAX || o.group.t < 2) : o.socialCd > 2) continue;
       const d = o.person.position.distanceTo(p);
       if (d < bd) { bd = d; best = o; }
@@ -309,7 +337,9 @@ export class Crowd {
         continue;
       }
       a.mode = 'walk'; a.px = person.position.x; a.pz = person.position.z;
+      if (a.hurryT > 0) a.hurryT -= dt;
       if (a.inspect) this.inspectStep(a, dt);
+      else if (a.entering && a.behavior !== 'follow') this.enterStep(a, dt);
       else if (a.group) this.chat(a, dt);
       else if (a.behavior === 'follow' && a.leader.inspect) a.speedNow = 0;     // assistants wait while their boss is checked
       else switch (a.behavior) {
@@ -336,7 +366,7 @@ export class Crowd {
           }
           a.pitchCd -= dt;
           if (a.pitchCd <= 0) {
-            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && o.person.position.distanceTo(person.position) < 1.8);
+            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && !o.entering && o.person.position.distanceTo(person.position) < 1.8);
             if (mark) {
               a.pitchTo = mark; a.pitchT = rand(2.5, 3.5); a.pitchCd = rand(4, 7);
               if (mark.behavior === 'wander' && !mark.group) mark.pause = a.pitchT;
@@ -373,6 +403,11 @@ export class Crowd {
     }
     this.collide();
     for (const a of this.agents) if (a.returning && this.area.contains(a.person.position, 0.3)) a.returning = false;   // back in the crowd
+    for (const a of this.agents) {                                       // walked onto the street: start their usual routine
+      if (!a.entering || a.inspect || !this.area.contains(a.person.position, 0.6)) continue;
+      if (a.behavior === 'follow' && a.leader.entering) continue;
+      a.entering = false; this.startBehavior(a);
+    }
     // stuck check: walking but barely getting anywhere (pinned against people or ice)
     for (const a of this.agents) {
       if (a.frozen || a.px === undefined) continue;
@@ -386,8 +421,9 @@ export class Crowd {
   /** Call someone up to the camera. onPresent(a) fires once they're standing there facing it. */
   inspect(a, onPresent) {
     if (a.group) this.leaveChat(a, false);
+    if (a.entering) { a.entering = false; this.startBehavior(a); }
     a.inspect = 'approach'; a.onPresent = onPresent;
-    a.home = a.person.position.clone(); a.pause = 0; a.pitchT = 0; a.returning = false;
+    a.home = a.person.position.clone(); a.pause = 0; a.pitchT = 0; a.returning = false; a.hurryT = 0;
     a.target = INSPECT_SPOT.clone();
   }
 
@@ -407,6 +443,7 @@ export class Crowd {
   /** Let them go: they walk back to where they were picked from and carry on. */
   release(a) {
     a.inspect = null; a.onPresent = null; a.returning = true; a.stuckT = 0;
+    a.hurryT = RELEASE_HURRY;                                            // hurry back out of the way
     a.target = a.behavior === 'pace' ? a.paceA : a.home.clone();
     a.socialCd = Math.max(a.socialCd, 4);
   }
@@ -459,7 +496,15 @@ export class Crowd {
     return hit ? hit.object.userData.agent : null;
   }
 
-  setHighlight(a, on) { if (a && !a.frozen) a.person.userData.setOutline(on ? HIGHLIGHT : null); }
+  setHighlight(a, on) { if (a && !a.frozen) a.person.userData.setOutline(on ? HIGHLIGHT : a.released ? RELEASED_OUTLINE : null); }
+
+  /** Mark someone the player checked and let go: a green wash over them (face included) and a mint outline. */
+  markReleased(a) {
+    if (a.released || a.frozen) return;
+    a.released = true;
+    for (const m of a.person.userData.mats) m.color.lerp(RELEASED_TINT, RELEASED_TINT_AMT);
+    a.person.userData.setOutline(RELEASED_OUTLINE);
+  }
 
   freeze(a) {
     a.frozen = true; a.freezeT = 0;

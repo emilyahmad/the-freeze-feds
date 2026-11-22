@@ -18,8 +18,9 @@ body {
 }
 
 #stage { position: absolute; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-#bg, #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#bg { object-fit: fill; pointer-events: none; }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#photo { position: absolute; pointer-events: none; }   /* sized / offset by main.js to cover the window */
+#bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: fill; }
 #gl.pointing { cursor: crosshair; }
 #gl.on-person { cursor: pointer; }
 
@@ -34,7 +35,6 @@ body {
 #sound { pointer-events: auto; cursor: pointer; }
 @keyframes pulse { to { transform: scale(1.08); } }
 
-#parody { position: absolute; right: 1%; bottom: 1%; font-size: 12px; color: #fff; background: rgba(40, 25, 90, .55); padding: 3px 9px; border-radius: 999px; pointer-events: none; }
 #debug-info { position: absolute; left: 1%; bottom: 1%; font: 13px ui-monospace, monospace; color: #fff; background: rgba(0,0,0,.6); padding: 4px 8px; border-radius: 6px; pointer-events: none; }
 
 /* ---- hover card ---- */
@@ -78,13 +78,13 @@ button.go {
 button.go:hover { transform: translateY(-2px) scale(1.03); }
 
 /* ---- ID check: LinkedIn-style profile on a phone (after design-references/linkedin.png) ---- */
-/* sized from the stage width (--sw, set in main.js) so it scales with the letterboxed stage */
+/* sized from --sw (set in main.js: the window width, capped by its height) so it scales with the window */
 #profile {
   position: absolute; left: 3.5%; top: 3%; width: 24em; z-index: 5; pointer-events: none;
   font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: calc(var(--sw, 1600px) * 0.0086); color: #e9e9ea;
   animation: pp-in .45s cubic-bezier(.2, .9, .3, 1.15);
 }
-#profile.out { animation: pp-out .35s ease-in forwards; }
+#profile.out { animation: pp-out .2s ease-in forwards; }
 @keyframes pp-in { from { transform: translate(-60%, 30%) rotate(-14deg); opacity: 0; } to { transform: rotate(-3deg); opacity: 1; } }
 @keyframes pp-out { from { transform: rotate(-3deg); opacity: 1; } to { transform: translate(-60%, 40%) rotate(-12deg); opacity: 0; } }
 #profile:not(.out) { transform: rotate(-3deg); }
@@ -125,10 +125,6 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
 .pf-hl-ic { font-size: 1.6em; line-height: 1; }
 .ph-nav { display: flex; justify-content: space-around; padding: .55em .5em 1.3em; background: #1d2226; border-top: .08em solid #38434f; font-size: .72em; text-align: center; color: #a0a8b0; line-height: 1.5; }
 .ph-nav span:first-child { color: #fff; }
-.pp-hint {
-  margin-top: .9em; text-align: center; font-family: Fredoka, system-ui, sans-serif; font-size: 1.15em; color: #fff;
-  background: rgba(40, 25, 90, .6); padding: .35em .8em; border-radius: 999px;
-}
 /* stamps across the phone screen */
 #pf-stamp {
   position: absolute; left: 50%; top: 38%; translate: -50% -50%;
@@ -140,3 +136,9 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
 #pf-stamp.on { animation: stamp .3s cubic-bezier(.3, 1.6, .5, 1) forwards; }
 #pf-stamp.frozen { color: #1f7fc4; } #pf-stamp.innocent { color: #d8283c; } #pf-stamp.released { color: #2f9f5a; }
 @keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.2); } to { opacity: .95; transform: rotate(-12deg) scale(1); } }
+
+/* ---- the photo's pedestrian signal: a blinking "don't walk" hand (src/signal.js) ---- */
+#walk-sign { position: absolute; left: 84.99%; top: 15.62%; width: 2.93%; height: 5.85%; border-radius: 14%; background: radial-gradient(#0d0b08, #050403); display: none; pointer-events: none; }
+#walk-sign svg { position: absolute; inset: 14% 16%; width: 68%; height: 72%; filter: drop-shadow(0 0 3px rgba(255, 140, 40, .9)); }
+#walk-sign.stop { display: block; }
+#walk-sign.dark svg { visibility: hidden; }

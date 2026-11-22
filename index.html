@@ -10,16 +10,29 @@
 <body>
   <!-- 16:9 stage: the street photo with a transparent WebGL canvas on top -->
   <div id="stage">
+    <!-- the street photo, scaled to cover the window (main.js layout); things pinned to the photo go in here -->
+    <div id="photo">
     <img id="bg" src="./street.webp" alt="" draggable="false" />
+    <!-- the pedestrian signal in the photo: covered with a "don't walk" hand that blinks (src/signal.js) -->
+    <div id="walk-sign" class="stop" aria-hidden="true">
+      <svg viewBox="0 0 40 48"><g fill="#ff8a1f">
+        <rect x="10" y="6" width="5" height="22" rx="2.5" /><rect x="15.8" y="3" width="5" height="25" rx="2.5" />
+        <rect x="21.6" y="4" width="5" height="24" rx="2.5" /><rect x="27.4" y="8" width="4.6" height="20" rx="2.3" />
+        <rect x="10" y="20" width="22" height="22" rx="5" />
+        <rect x="9" y="20" width="6" height="20" rx="3" transform="rotate(-32 12 39)" />
+      </g></svg>
+    </div>
+    </div>
     <canvas id="gl"></canvas>
     <div id="fx"></div>
     <div id="flash"></div>
 
     <div id="hud" hidden>
       <div class="pill" id="timer">⏱ 60</div>
-      <div class="pill" id="caught">❄ CEOs 0 / 9</div>
+      <div class="pill" id="caught">❄ Tech Execs 0 / 9</div>
       <button class="pill" id="sound" title="Sound">🔊</button>
     </div>
+
 
     <div id="card" hidden>
       <canvas id="card-pic" width="160" height="160"></canvas>
@@ -61,13 +74,11 @@
           <div id="pf-stamp"></div>
         </div>
       </div>
-      <div class="pp-hint">Click them again to <b>❄ freeze</b> · click anywhere else to <b>release</b></div>
     </div>
 
     <div id="debug-info" hidden></div>
-    <div id="parody">Parody · caricatures for satire, not endorsed by anyone depicted</div>
 
-    <div class="screen" id="start-screen">
+    <div class="screen" id="start-screen" hidden>
       <div class="panel">
         <h1>❄ The Freeze Feds ❄</h1>
         <p>Nine tech CEOs are loose on California &amp; Powell, and it's up to you to catch them in a scandalous act! Hover over anyone to inspect their activity, and click a CEO to freeze them in ice.</p>
@@ -77,7 +88,7 @@
           <li>Wrong person: <b>−10 s</b></li>
           <li>Watch how people move. The CEOs don't walk like everyone else.</li>
         </ul>
-        <button class="go" id="start">Start the shift</button>
+        <button class="go" id="start">Play</button>
       </div>
     </div>
 

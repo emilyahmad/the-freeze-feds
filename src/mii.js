@@ -202,6 +202,20 @@ const CROWD_FACES = {
   rando7: { eyes: [[378, 482], [640, 482]], chin: [510, 920] },
   rando8: { eyes: [[385, 478], [645, 478]], chin: [505, 930], glasses: true },
   rando9: { eyes: [[385, 483], [640, 478]], chin: [505, 935], glasses: true },
+  rando10: { eyes: [[382, 480], [640, 480]], chin: [505, 885] },
+  rando11: { eyes: [[382, 480], [640, 480]], chin: [510, 925] },
+  rando12: { eyes: [[382, 480], [640, 480]], chin: [510, 940] },
+  rando13: { eyes: [[382, 480], [640, 480]], chin: [510, 935] },
+  rando14: { eyes: [[382, 480], [640, 480]], chin: [510, 945] },
+  rando15: { eyes: [[382, 480], [640, 480]], chin: [510, 920] },
+  rando16: { eyes: [[382, 480], [640, 480]], chin: [510, 950] },
+  rando17: { eyes: [[382, 480], [640, 480]], chin: [510, 920] },
+  rando18: { eyes: [[382, 480], [640, 480]], chin: [510, 935] },
+  rando19: { eyes: [[382, 480], [640, 480]], chin: [510, 950] },
+  rando20: { eyes: [[382, 480], [640, 480]], chin: [510, 960] },
+  rando21: { eyes: [[382, 480], [640, 480]], chin: [510, 965] },
+  rando22: { eyes: [[382, 480], [640, 480]], chin: [510, 975] },
+  rando23: { eyes: [[382, 480], [640, 480]], chin: [510, 960] },
 };
 // the photo decal on the head (head-frame metres) and where the photo's eyes / chin land on it
 const PHOTO_W = 0.48, PHOTO_H = 0.56, PHOTO_CY = 0.22, EYE_TO_CHIN = 0.29, PPM = 1000;

@@ -2,12 +2,15 @@ import * as THREE from 'three';
 import './style.css';
 import { IMG_W, IMG_H, setupCamera, buildWalkArea, drawDebug } from './scene.js';
 import { Crowd } from './crowd.js';
-import { HoverCard, Profile, hud, popup, snowBurst, wrongFlash, showScreen } from './ui.js';
+import { HoverCard, Profile, hud, showScreen } from './ui.js';
 import * as sfx from './sfx.js';
 import { loadMiiModels } from './mii.js';
+import { createFreeze } from './games/freeze.js';
+import { createSignal } from './signal.js';
 
-const ROUND_TIME = 60, BONUS = 10, PENALTY = 10;
-const debug = new URLSearchParams(location.search).has('debug');
+// The shell: renderer, street scene, crowd, layout, pointer and the animation loop. The round itself lives in
+// src/games/freeze.js as a mode: update(dt), hover(pointer), down(pointer), stop().
+const params = new URLSearchParams(location.search), debug = params.has('debug');
 const $ = (s) => document.querySelector(s);
 
 // ---- renderer + scene ----
@@ -28,142 +31,117 @@ const crowd = new Crowd(scene, area);
 const card = new HoverCard(renderer, scene);
 const profile = new Profile(renderer, scene);
 
-// ---- layout: keep the stage at the photo's aspect ratio, letterboxed ----
-let stageW = 0, stageH = 0;
+// ---- layout: the stage fills the window; the photo is scaled to cover it (cropping the overflow, centred) and
+// the camera is given the same crop with setViewOffset, so the 3D people stay lined up with the photo ----
+let stageW = 0, stageH = 0, photoScale = 1, cropX = 0, cropY = 0;
 function layout() {
-  const aspect = IMG_W / IMG_H;
-  stageW = innerWidth; stageH = innerWidth / aspect;
-  if (stageH > innerHeight) { stageH = innerHeight; stageW = innerHeight * aspect; }
-  Object.assign(stage.style, { width: stageW + 'px', height: stageH + 'px', left: (innerWidth - stageW) / 2 + 'px', top: (innerHeight - stageH) / 2 + 'px' });
+  stageW = innerWidth; stageH = innerHeight;
+  photoScale = Math.max(stageW / IMG_W, stageH / IMG_H);
+  const fullW = IMG_W * photoScale, fullH = IMG_H * photoScale;
+  cropX = (fullW - stageW) / 2; cropY = (fullH - stageH) / 2;
+  Object.assign(stage.style, { width: stageW + 'px', height: stageH + 'px', left: '0px', top: '0px' });
+  Object.assign($('#photo').style, { width: fullW + 'px', height: fullH + 'px', left: -cropX + 'px', top: -cropY + 'px' });
+  camera.setViewOffset(fullW, fullH, cropX, cropY, stageW, stageH);
   renderer.setSize(stageW, stageH);
-  stage.style.setProperty('--sw', stageW + 'px');   // the profile phone scales with the stage
+  stage.style.setProperty('--sw', Math.min(stageW, stageH * IMG_W / IMG_H) + 'px');   // the profile phone scales with the window
 }
 addEventListener('resize', layout); layout();
 
 // ---- pointer ----
 const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2();
 let pointer = null;            // {x, y} in stage px, or null when off the stage
-let hovered = null;
 function setPointer(e) {
   const r = canvas.getBoundingClientRect();
   pointer = { x: e.clientX - r.left, y: e.clientY - r.top };
   ndc.set(pointer.x / r.width * 2 - 1, 1 - pointer.y / r.height * 2);
-  if (debug) { const d = $('#debug-info'); d.hidden = false; d.textContent = `img px ${Math.round(pointer.x / r.width * IMG_W)}, ${Math.round(pointer.y / r.height * IMG_H)}`; }
+  if (debug) { const d = $('#debug-info'); d.hidden = false; d.textContent = `img px ${Math.round((pointer.x + cropX) / photoScale)}, ${Math.round((pointer.y + cropY) / photoScale)}`; }
 }
 canvas.addEventListener('pointermove', setPointer);
 canvas.addEventListener('pointerleave', () => { pointer = null; });
-
-function updateHover() {
-  let a = null;
-  if (pointer && state === 'playing') { raycaster.setFromCamera(ndc, camera); a = crowd.pick(raycaster); }
-  if (checking) {                              // during an ID check only the person being checked is clickable
-    a = a === checking ? a : null;
-    if (a !== hovered) { crowd.setHighlight(hovered, false); crowd.setHighlight(a, true); hovered = a; }
-    canvas.className = a ? 'on-person' : 'pointing';
-    card.show(null);
-    return;
-  }
-  if (a !== hovered) { crowd.setHighlight(hovered, false); crowd.setHighlight(a, true); hovered = a; }
-  canvas.className = state === 'playing' ? (a ? 'on-person' : 'pointing') : '';
-  card.show(a, pointer?.x, pointer?.y, stageW, stageH);
-}
-
-// ---- ID check: first click calls someone up to the camera and shows their LinkedIn-style profile; clicking them again
-// freezes them (right or wrong), clicking anywhere else releases them ----
-let checking = null, deciding = false, needPhoto = false;
-
-function startCheck(a) {
-  checking = a; deciding = false;
-  crowd.setHighlight(hovered, false); hovered = null; card.show(null);
-  profile.open(a);
-  crowd.inspect(a, () => { needPhoto = true; });   // profile photo once they're standing in front of the camera
-}
-
-function endCheck(stampKind, sub, delay) {
-  const a = checking;
-  deciding = true; profile.stamp(stampKind, sub); profile.close(delay);
-  setTimeout(() => {
-    if (checking !== a) return;
-    if (stampKind !== 'frozen' && !a.frozen) crowd.release(a);
-    crowd.setHighlight(a, false); checking = null; deciding = false;
-    if (caught === crowd.ceoCount && state === 'playing') endRound(true);
-  }, delay * 1000);
-}
-
-function cancelCheck() {                          // round over / restart: drop everything immediately
-  if (checking && !checking.frozen) crowd.release(checking);
-  checking = null; deciding = false; needPhoto = false; profile.close(0);
-}
-
-// ---- round ----
-let state = 'start', timeLeft = ROUND_TIME, caught = 0, wrong = 0, lastTick = 0;
-
-function startRound() {
-  sfx.unlock();
-  cancelCheck(); crowd.reset(); hovered = null; card.show(null);
-  timeLeft = ROUND_TIME; caught = 0; wrong = 0; lastTick = 0;
-  hud.timer(timeLeft); hud.caught(0, crowd.ceoCount); hud.show(true);
-  showScreen(null); state = 'playing';
-}
-
-function endRound(won) {
-  state = 'over'; cancelCheck(); card.show(null); crowd.setHighlight(hovered, false); hovered = null;
-  sfx.end(won);
-  $('#over-title').textContent = won ? 'All CEOs frozen! ❄' : "Time's up!";
-  const bosses = [...crowd.agents, ...crowd.retired].filter((a) => a.isCEO);   // incl. frozen ones already sent off
-  const list = (as) => as.map((a) => a.name).join(', ');
-  const frozen = bosses.filter((a) => a.frozen), escaped = bosses.filter((a) => !a.frozen);
-  const stats = $('#over-stats'); stats.replaceChildren();
-  const line = (html) => { const d = document.createElement('div'); d.innerHTML = html; stats.append(d); return d; };
-  line(`You froze <b>${caught} of ${crowd.ceoCount}</b> bosses` + (won ? ` with <b>${Math.ceil(timeLeft)} s</b> to spare` : '') + `. Wrong catches: ${wrong}`);
-  if (frozen.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `❄ Frozen: ${list(frozen)}` }));
-  if (escaped.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `🏃 Got away: ${list(escaped)}` }));
-  showScreen('over-screen');
-}
-
 canvas.addEventListener('pointerdown', (e) => {
   setPointer(e);
   if (debug) console.log('img px', $('#debug-info').textContent);
-  if (state !== 'playing') return;
-  raycaster.setFromCamera(ndc, camera);
-  const a = crowd.pick(raycaster);
-  if (checking) {
-    if (deciding) return;                                     // a stamp is already coming down
-    if (a !== checking) { endCheck('released', null, 0.6); return; }   // clicked off them: let them go
-    if (a.isCEO) {
-      crowd.freezeAndSendOff(a, 1.0); caught++; timeLeft += BONUS;
-      popup(pointer.x, pointer.y, `❄ ${a.name} +${BONUS}s`, 'good'); snowBurst(pointer.x, pointer.y); sfx.freeze();
-      hud.caught(caught, crowd.ceoCount);
-      endCheck('frozen', a.name, 1.3);
-    } else {
-      timeLeft = Math.max(0, timeLeft - PENALTY); wrong++;
-      crowd.shake(a); popup(pointer.x, pointer.y, `−${PENALTY}s`, 'bad'); wrongFlash(); sfx.wrong();
-      endCheck('innocent', `−${PENALTY}s`, 1.1);
-    }
-    return;
-  }
-  if (!a || a.frozen) return;
-  startCheck(a);
+  mode?.down(pointer);
 });
 
-$('#start').onclick = startRound;
-if (debug) { startRound(); window.__game = { crowd, camera, THREE, startCheck, endCheck: (k) => endCheck(k, null, 0.6) }; } // ?debug skips the start screen; __game is for tuning from the console
-$('#restart').onclick = startRound;
+// ---- modes ----
+let mode = null;
+const ctx = {
+  renderer, scene, camera, crowd, card, profile, raycaster, ndc, canvas, showScreen,
+  size: () => ({ w: stageW, h: stageH }),
+  setMode(m) { mode?.stop?.(); mode = m; if (!m) { canvas.className = ''; card.show(null); } },
+};
+
+// ---- start screen → round → over screen ----
+// the crossing signal shows WALK during a round and turns back to the red hand when it ends
+const signal = createSignal();
+function startFreeze() {
+  showScreen(null); signal.walk();
+  const m = createFreeze(ctx, { onDone: (r) => { overScreen(r); } });
+  ctx.setMode(m);
+  if (debug) window.__game.freeze = m;
+}
+function overScreen(r) {
+  hud.show(false); signal.stop({ blink: true });
+  $('#over-title').textContent = r.won ? 'All CEOs frozen! ❄' : "Time's up!";
+  const list = (as) => as.map((a) => a.name).join(', ');
+  const stats = $('#over-stats'); stats.replaceChildren();
+  const line = (html) => { const d = document.createElement('div'); d.innerHTML = html; stats.append(d); return d; };
+  line(`You froze <b>${r.caught} of ${r.ceoCount}</b> CEOs` + (r.won ? ` with <b>${Math.ceil(r.timeLeft)} s</b> to spare` : '') + `. Wrong catches: ${r.wrong}`);
+  if (r.frozen.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `❄ Frozen: ${list(r.frozen)}` }));
+  if (r.escaped.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `🏃 Got away: ${list(r.escaped)}` }));
+  showScreen('over-screen');
+}
+
+$('#start').onclick = startFreeze;
+$('#restart').onclick = startFreeze;
 $('#sound').onclick = () => { $('#sound').textContent = sfx.toggleMute() ? '🔇' : '🔊'; };
+
+// ?debug skips the start screen; window.__game is for tuning from the console
+// Intro: the empty street at its normal view with the steady red hand; the photo zooms in on the crossing signal,
+// the signal turns to WALK, the view zooms back out, then the start screen comes up. The crowd only floods in once
+// Play is pressed (crowd.reset() in the round). ?debug skips all of it.
+const INTRO = { wait: 0.8, zoomIn: 1.6, red: 0.9, walk: 1.2, zoomOut: 1.4, beat: 0.3 };   // seconds, in order
+const INTRO_ZOOM = 3;                    // how far the photo zooms in on the signal
+const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+/** Zoom the photo so the walk sign is centred at `zoom`× (clamped so the photo still covers the stage). */
+function signalZoom(zoom) {
+  const photo = $('#photo'), pr = photo.getBoundingClientRect(), sr = $('#walk-sign').getBoundingClientRect();
+  const lx = sr.left + sr.width / 2 - pr.left, ly = sr.top + sr.height / 2 - pr.top;   // sign centre, in photo px
+  const left = -cropX, top = -cropY, fullW = pr.width, fullH = pr.height;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const tx = clamp(stageW / 2 - left - zoom * lx, stageW - left - zoom * fullW, -left);
+  const ty = clamp(stageH / 2 - top - zoom * ly, stageH - top - zoom * fullH, -top);
+  return `translate(${tx}px, ${ty}px) scale(${zoom})`;
+}
+function zoomPhoto(from, to, secs) {
+  const anim = $('#photo').animate([{ transform: from }, { transform: to }],
+    { duration: secs * 1000, easing: 'cubic-bezier(.45, 0, .25, 1)', fill: 'forwards' });
+  return anim.finished.then(() => anim);
+}
+async function intro() {
+  $('#photo').style.transformOrigin = '0 0';
+  await sleep(INTRO.wait);
+  const close = signalZoom(INTRO_ZOOM);
+  await zoomPhoto('none', close, INTRO.zoomIn);
+  await sleep(INTRO.red);
+  signal.walk();
+  await sleep(INTRO.walk);
+  (await zoomPhoto(close, 'none', INTRO.zoomOut)).cancel();   // back to normal; drop the animation so layout() owns the photo again
+  await sleep(INTRO.beat);
+  showScreen('start-screen');
+}
+
+if (debug) { window.__game = { crowd, camera, THREE, ctx, get mode() { return mode; } }; startFreeze(); }
+else intro();
 
 // ---- loop ----
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
-  crowd.update(dt);                       // the crowd keeps walking behind the start/end screens too
-  if (state === 'playing') {
-    timeLeft -= dt;
-    const s = Math.ceil(timeLeft);
-    if (s <= 10 && s > 0 && s !== lastTick) { lastTick = s; sfx.tick(); }
-    hud.timer(Math.max(0, timeLeft));
-    if (timeLeft <= 0) endRound(false);
-  }
-  if (needPhoto && checking) { needPhoto = false; profile.photo(); }
-  renderer.render(scene, camera);
-  updateHover();
+  if (!mode?.pauseCrowd) crowd.update(dt);   // the crowd keeps walking behind the menus too
+  mode?.update(dt);
+  if (!mode?.render?.()) renderer.render(scene, camera);
+  if (mode) mode.hover(pointer);
+  else { canvas.className = ''; card.show(null); }
 });
