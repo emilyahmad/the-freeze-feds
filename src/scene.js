@@ -84,7 +84,7 @@ export function buildWalkArea(camera) {
     /** A spot `margin` m past the left (side < 0) or right edge of the photo, level with `p` (an image row is a
      *  line of constant depth on the ground, since the camera only pitches): where people walk in from. */
     offscreen(p, side, margin = 1) {
-      const py = (1 - p.clone().project(fullView(camera)).y) / 2 * IMG_H;
+      const py = Math.min(IMG_H - 1, Math.max(0, (1 - p.clone().project(fullView(camera)).y) / 2 * IMG_H));   // in front of the photo's bottom edge: use that row
       const e = imgToGround(camera, side < 0 ? 0 : IMG_W, py) || p.clone();
       e.x += side < 0 ? -margin : margin;
       return e;

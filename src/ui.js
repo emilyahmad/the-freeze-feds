@@ -1,68 +1,10 @@
 import * as THREE from 'three';
 
 const $ = (s) => document.querySelector(s);
-const PIC = 192;              // close-up render size (px)
-const CARD_LAYER = 1;         // the hovered person is put on this layer so the close-up shows only them
+const CARD_LAYER = 1;         // the person being checked is put on this layer so the profile photo shows only them
 const PHOTO_HEADS = 1.9;      // profile photo frame height, in head heights (smaller = tighter on the face)
 const PHOTO_DROP = 0.08;      // how far below the eyes the photo is aimed, as a fraction of the frame (head sits a bit high, like a headshot)
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
-
-/** Hover card: renders a close-up of the hovered character with a second camera into a render target. */
-export class HoverCard {
-  constructor(renderer, scene) {
-    this.renderer = renderer; this.scene = scene;
-    this.el = $('#card'); this.text = $('#card-text');
-    this.ctx = $('#card-pic').getContext('2d');
-    this.cam = new THREE.PerspectiveCamera(28, 1, 0.1, 40);
-    this.cam.layers.set(CARD_LAYER);
-    this.rt = new THREE.WebGLRenderTarget(PIC, PIC, { samples: 4 });
-    this.rt.texture.colorSpace = THREE.SRGBColorSpace;
-    this.pixels = new Uint8Array(PIC * PIC * 4);
-    this.img = new ImageData(PIC, PIC);
-    this.scratch = Object.assign(document.createElement('canvas'), { width: PIC, height: PIC });
-    this.agent = null;
-  }
-
-  setLayer(agent, on) { agent?.person.traverse((o) => (on ? o.layers.enable(CARD_LAYER) : o.layers.disable(CARD_LAYER))); }
-
-  show(agent, x, y, stageW, stageH) {
-    if (agent !== this.agent || (agent && agent.frozen !== this.shownFrozen)) {
-      if (agent !== this.agent) { this.setLayer(this.agent, false); this.setLayer(agent, true); }
-      this.agent = agent;
-      if (agent) {
-        // a boss's name is only revealed once they're frozen
-        this.shownFrozen = agent.frozen;
-        this.text.replaceChildren();
-        if (agent.frozen) this.text.append(Object.assign(document.createElement('b'), { className: 'name', textContent: `❄ ${agent.name}` }), document.createElement('br'));
-        this.text.append(agent.info);
-      }
-    }
-    if (!agent) { this.el.hidden = true; return; }
-    this.el.hidden = false;
-    this.el.classList.toggle('frozen', agent.frozen);
-    // keep the card next to the cursor, flipping sides near the edges
-    const w = this.el.offsetWidth, h = this.el.offsetHeight, gap = 22;
-    const left = x + gap + w > stageW ? x - gap - w : x + gap;
-    const top = Math.min(Math.max(8, y - h / 2), stageH - h - 8);
-    this.el.style.left = left + 'px'; this.el.style.top = top + 'px';
-    this.render();
-  }
-
-  render() {
-    const p = this.agent.person, h = p.rotation.y, base = p.position;
-    const tgt = new THREE.Vector3(base.x, 0.92, base.z);
-    this.cam.position.set(base.x + Math.sin(h + 0.35) * 2.9, 1.3, base.z + Math.cos(h + 0.35) * 2.9);
-    this.cam.lookAt(tgt);
-    const r = this.renderer, prevAlpha = r.getClearAlpha(), prevColor = r.getClearColor(new THREE.Color());
-    r.setRenderTarget(this.rt); r.setClearColor(0xe6dcff, 1); r.clear(); r.render(this.scene, this.cam);
-    r.readRenderTargetPixels(this.rt, 0, 0, PIC, PIC, this.pixels);
-    r.setRenderTarget(null); r.setClearColor(prevColor, prevAlpha);
-    const row = PIC * 4;                       // WebGL rows are bottom-up: flip while copying
-    for (let y = 0; y < PIC; y++) this.img.data.set(this.pixels.subarray((PIC - 1 - y) * row, (PIC - y) * row), y * row);
-    this.scratch.getContext('2d').putImageData(this.img, 0, 0);
-    this.ctx.drawImage(this.scratch, 0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
-  }
-}
 
 // ---- HUD, popups and screens ----
 export const hud = {
@@ -87,6 +29,56 @@ export function snowBurst(x, y) {
       { transform: `translate(${x + Math.cos(a) * d}px, ${y + Math.sin(a) * d}px) scale(1) rotate(${Math.random() * 360}deg)`, opacity: 0 },
     ], { duration: 700 + Math.random() * 400, easing: 'cubic-bezier(.2,.7,.3,1)' }).onfinish = () => el.remove();
   }
+}
+
+/** Wrong person: a snowball flies back out of their face toward the player, grows until it splats over the whole
+ *  screen, sticks for a moment, then slides off the bottom like snow down a window. onImpact() fires on the splat,
+ *  onDone() once the screen is clear again. */
+const BACK_FLY = 0.5, BACK_HOLD = 0.75, BACK_SLIDE = 1.2;   // seconds: flight toward the screen, stuck on it, sliding off
+export function snowBack(from, { text = '', onImpact, onDone } = {}) {
+  const stage = $('#stage'), w = stage.clientWidth, h = stage.clientHeight;
+  const ball = Object.assign(document.createElement('div'), { className: 'snowball back' });
+  stage.appendChild(ball);
+  // perspective: depth shrinks linearly in time, so scale = s0 / depth and it rushes in faster the closer it gets
+  const s0 = 0.45, s1 = Math.hypot(w, h) / 64 * 1.3, to = { x: w * 0.5, y: h * 0.45 }, frames = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16, depth = 1 - t * (1 - s0 / s1), k = (s0 / depth - s0) / (s1 - s0);   // k: 0 → 1 screen-space progress
+    frames.push({ transform: `translate(${from.x + (to.x - from.x) * k}px, ${from.y + (to.y - from.y) * k}px) scale(${s0 / depth}) rotate(${-t * 240}deg)` });
+  }
+  ball.animate(frames, { duration: BACK_FLY * 1000, easing: 'linear', fill: 'forwards' }).onfinish = () => {
+    ball.remove();
+    const splat = Object.assign(document.createElement('div'), { className: 'splat' });
+    const body = Object.assign(document.createElement('div'), { className: 'splat-body' });
+    const trail = Object.assign(document.createElement('div'), { className: 'splat-trail' });
+    const stops = []; for (let x = 0; x < 100;) {            // uneven wet streaks left on the "glass" above it
+      const a = (Math.random() ** 2 * 0.45).toFixed(2), x2 = Math.min(100, x + 0.6 + Math.random() * 3.5);
+      stops.push(`rgba(235, 248, 255, ${a}) ${x.toFixed(1)}% ${x2.toFixed(1)}%`); x = x2;
+    }
+    trail.style.background = `linear-gradient(90deg, ${stops.join(', ')})`;
+    splat.append(trail, body);
+    for (let i = 0, n = 13; i < n; i++) {                    // lumpy top edge (shows as it slides down)
+      const s = 10 + Math.random() * 14;
+      body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-lump' }))
+        .style.cssText = `width:${s}vmax;height:${s}vmax;left:${-6 + i / (n - 1) * 112 - s / 2}%;top:${-s * (0.3 + Math.random() * 0.25)}vmax`;
+    }
+    for (let i = 0; i < 9; i++) {                            // soft shaded clumps so it reads as packed snow
+      const s = 14 + Math.random() * 26;
+      body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-clump' }))
+        .style.cssText = `width:${s}vmax;height:${s}vmax;left:${Math.random() * 100 - s / 2}%;top:${Math.random() * 90}%`;
+    }
+    if (text) body.appendChild(Object.assign(document.createElement('div'), { className: 'splat-text', textContent: text }));
+    stage.appendChild(splat);
+    stage.classList.remove('shake'); void stage.offsetWidth; stage.classList.add('shake');
+    onImpact?.();
+    const total = 120 + BACK_HOLD * 1000 + BACK_SLIDE * 1000, at = (ms) => ms / total;
+    splat.animate([
+      { transform: 'translateY(0) scale(1.12)', opacity: 0.6, offset: 0 },
+      { transform: 'translateY(0) scale(1)', opacity: 1, offset: at(120) },
+      { transform: 'translateY(0) scale(1)', offset: at(120 + BACK_HOLD * 1000), easing: 'cubic-bezier(.55, 0, .85, .45)' },
+      { transform: 'translateY(4%) scale(1)', offset: at(120 + BACK_HOLD * 1000 + 300), easing: 'cubic-bezier(.4, 0, .9, .6)' },
+      { transform: 'translateY(125%) scale(1)', offset: 1 },
+    ], { duration: total, fill: 'forwards' }).onfinish = () => { splat.remove(); onDone?.(); };
+  };
 }
 
 export function wrongFlash() {
@@ -150,6 +142,8 @@ const BOSS = {
   dimon: { head: 'Chairman & CEO @ a very large bank 🏦 | Fortress balance sheet', edu: 'Harvard Business School', followers: '5,118,207', banner: ['Too big to fail 🏛️', '#0b1f44', '#5b6d8e'], hl: 'Survived several crises (caused by other banks).' },
   buffett: { head: 'Chairman & CEO @ a holding company in Omaha | Be greedy when others are fearful 🥤', edu: 'Columbia Business School', followers: '4,690,233', banner: ['Buy and hold 🍔', '#2a1a10', '#9a2b2b'], hl: 'Celebrating 60 years at the same company.' },
 };
+const DEGREES = ['BS, Computer Science', 'MS, Computer Science', 'PhD, Machine Learning', 'BS, Electrical Engineering', 'MEng, EECS',
+  'BS, Mathematics', 'PhD, Physics', 'BS, Mechanical Engineering', 'MS, Robotics', 'BA, Computer Science'];
 const pickR = (a) => a[Math.floor(Math.random() * a.length)];
 const randInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const fmt = (n) => n.toLocaleString('en-US');
@@ -258,10 +252,27 @@ export function profileFor(agent) {
       followers: fmt(randInt(800, 15000)), banner: draw(BANNERS),
       hl: draw(HL).replace('{y}', `${years} year${years > 1 ? 's' : ''}`).replace('{job}', job),
     };
+    agent.profile.since = 2026 - randInt(boss ? 8 : 0, boss ? 30 : 7);
+    agent.profile.grad = Math.min(agent.profile.since, 2026) - randInt(0, 6);
+    agent.profile.degree = pickR(DEGREES);
     agent.profile.conn ??= big || Math.random() < 0.3 ? '500+ connections' : `${randInt(30, 480)} connections`;
     agent.profile.mutual = `${draw(FIRST_F)}, ${draw(FIRST_M)} and ${randInt(2, 60)} other mutual connections`;
   }
   return agent.profile;
+}
+
+/** Mouse drag-to-scroll on the phone (touch and wheel scroll natively). Pointer events stop here so dragging
+ *  or clicking the phone never reaches the street underneath (which would release the person being checked). */
+function dragScroll(el) {
+  let y0 = 0, top0 = 0, id = null;
+  el.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    if (e.pointerType !== 'mouse') return;
+    id = e.pointerId; y0 = e.clientY; top0 = el.scrollTop; el.setPointerCapture(id); el.classList.add('drag');
+  });
+  el.addEventListener('pointermove', (e) => { if (e.pointerId === id) el.scrollTop = top0 - (e.clientY - y0); });
+  const end = (e) => { if (e.pointerId === id) { id = null; el.classList.remove('drag'); } };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 }
 
 export class Profile {
@@ -278,6 +289,7 @@ export class Profile {
     this.img = new ImageData(this.W, this.H);
     this.scratch = Object.assign(document.createElement('canvas'), { width: this.W, height: this.H });
     this.agent = null; this.hideTimer = 0;
+    this.scroller = $('.ph-scroll'); dragScroll(this.scroller);
   }
 
   open(agent) {
@@ -289,10 +301,30 @@ export class Profile {
     set('#pf-about', agent.info); set('#pf-hl', p.hl);
     const [text, c0, c1] = p.banner, banner = $('#pf-banner');
     banner.textContent = text; banner.style.background = `linear-gradient(120deg, ${c0}, ${c1})`;
+    // Experience / Education, below the fold: read off the headline and school so they always agree with them
+    const [title, org] = p.headline.split(' | ')[0].split(' @ ');
+    set('#pf-xp-title', title); set('#pf-xp-org', org ? `${org} · Full-time` : 'Self-employed');
+    set('#pf-xp-time', `${p.since} – Present · ${2026 - p.since || 1} yr${2026 - p.since > 1 ? 's' : ''}`);
+    const logo = $('#pf-xp-logo');
+    logo.textContent = (org || title).replace(/^(an?|the)\s+/i, '')[0].toUpperCase(); logo.style.background = c1;
+    const [first, second] = p.edu.split(' · '), [, school, paren] = first.match(/^(.*?)(?:\s*\((.*)\))?$/);
+    const note = paren || (!/universit|college|institute|school/i.test(second ?? 'school') && second);   // "Self-taught · IOI team"
+    set('#pf-ed-school', school); set('#pf-ed-deg', note ? note[0].toUpperCase() + note.slice(1) : p.degree);
+    set('#pf-ed-time', `${p.grad - 4} – ${p.grad}`); set('#pf-ed-logo', school[0]);
+    this.scroller.scrollTop = 0;
+    this.tick();
     this.stampEl.className = ''; this.stampEl.replaceChildren();
     this.photoCtx.fillStyle = '#e9e5f2'; this.photoCtx.fillRect(0, 0, this.W, this.H);
     this.el.classList.remove('out'); this.el.hidden = false;
     void this.el.offsetWidth;                       // restart the slide-in animation
+  }
+
+  /** Status-bar clock: the real local time, iPhone style (no AM/PM, no leading zero). Kept ticking while the phone is up. */
+  tick() {
+    clearTimeout(this.clockTimer);
+    const now = new Date(), h = now.getHours() % 12 || 12;
+    $('#pf-clock').textContent = `${h}:${String(now.getMinutes()).padStart(2, '0')}`;
+    if (this.agent) this.clockTimer = setTimeout(() => this.tick(), 60000 - now.getSeconds() * 1000 - now.getMilliseconds() + 50);
   }
 
   /** Profile photo: a straight-on head-and-shoulders render of the agent, on their own layer.

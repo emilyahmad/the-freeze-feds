@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import './style.css';
 import { IMG_W, IMG_H, setupCamera, buildWalkArea, drawDebug } from './scene.js';
 import { Crowd } from './crowd.js';
-import { HoverCard, Profile, hud, showScreen } from './ui.js';
+import { Profile, hud, showScreen } from './ui.js';
 import * as sfx from './sfx.js';
 import { loadMiiModels } from './mii.js';
 import { createFreeze } from './games/freeze.js';
 import { createSignal } from './signal.js';
+import { installWiiCursor } from './cursor.js';
+
+installWiiCursor();
 
 // The shell: renderer, street scene, crowd, layout, pointer and the animation loop. The round itself lives in
 // src/games/freeze.js as a mode: update(dt), hover(pointer), down(pointer), stop().
@@ -28,7 +31,6 @@ await loadMiiModels();                    // Mii bodies, heads, hair and hats (p
 const area = buildWalkArea(camera);
 if (debug) drawDebug(scene, area);
 const crowd = new Crowd(scene, area);
-const card = new HoverCard(renderer, scene);
 const profile = new Profile(renderer, scene);
 
 // ---- layout: the stage fills the window; the photo is scaled to cover it (cropping the overflow, centred) and
@@ -90,9 +92,9 @@ canvas.addEventListener('pointerdown', (e) => {
 // ---- modes ----
 let mode = null;
 const ctx = {
-  renderer, scene, camera, crowd, card, profile, raycaster, ndc, canvas, showScreen,
+  renderer, scene, camera, crowd, profile, raycaster, ndc, canvas, showScreen,
   size: () => ({ w: stageW, h: stageH }),
-  setMode(m) { mode?.stop?.(); mode = m; if (!m) { canvas.className = ''; card.show(null); } },
+  setMode(m) { mode?.stop?.(); mode = m; if (!m) { canvas.className = ''; crowd.setHover(null); } },
 };
 
 // ---- start screen → round → over screen ----
@@ -173,11 +175,11 @@ renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   updateLook(dt);
   if (!mode?.pauseCrowd) crowd.update(dt);   // the crowd keeps walking behind the menus too
-  // background chatter follows how many people have made it onto the street (not still walking in, not frozen)
-  const total = crowd.agents.length + crowd.retired.length;
-  sfx.crowdLevel(total ? crowd.agents.filter((a) => !a.entering && !a.frozen).length / total : 0);
+  // background chatter follows how many people are on the street (not still walking in, not frozen; it fades as
+  // they walk off at the end of a round)
+  sfx.crowdLevel(crowd.total ? crowd.agents.filter((a) => !a.entering && !a.frozen).length / crowd.total : 0);
   mode?.update(dt);
   if (!mode?.render?.()) renderer.render(scene, camera);
   if (mode) mode.hover(pointer);
-  else { canvas.className = ''; card.show(null); }
+  else { canvas.className = ''; crowd.setHover(null); }
 });

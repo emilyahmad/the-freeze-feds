@@ -9,6 +9,9 @@ const STEP_RATE = [1.5, 5.5];          // walk-cycle speed (rad/s) = a + b × sp
 const RADIUS = 0.27, ICE_RADIUS = 0.5;
 const LOOK_AHEAD = 1.1;                // how far ahead walkers start stepping around people
 const BUMP_TIME = 0.45, BUMP_LEAN = 0.22, BUMP_MIN = 0.03;   // lean-away wobble when bumped (MIN: push depth in m)
+// flinch (cower behind the arms, head ducked away) as the snowball's coming: BRACE_HOLD s without a brace() refresh and it
+// relaxes; bystanders within FLINCH_NEAR m of the target flinch too, weaker with distance and a beat late
+const FLINCH_IN = 14, FLINCH_OUT = 5, BRACE_HOLD = 0.3, FLINCH_NEAR = 3, FLINCH_NEAR_AMT = 0.8;
 const STUCK_TIME = 1.1;                // blocked this long → pick somewhere else to go
 // roaming: each new destination is a random spot NEAR_MIN..NEAR_MAX m away in any direction (NEAR_CHANCE),
 // otherwise a random spot anywhere in the walk area (sampled evenly over the image, so mostly near the camera)
@@ -38,6 +41,14 @@ const SENDOFF_TIME = 6, SENDOFF_DIST = 30, SENDOFF_SPIN = 0.7, FADE_FROM = 0.45;
 // entrance: at the start of a round everyone walks in from just past the left or right edge of the photo
 // (ENTER_MARGIN m out, at a random depth), staggered by up to ENTER_SPREAD s, a little brisker than usual
 const ENTER_MARGIN = [0.6, 2.5], ENTER_SPREAD = 4, ENTER_SPEEDUP = 1.3;
+// exit: when a round ends everyone still walking around heads briskly off the nearer side of the photo
+// (EXIT_MARGIN m past the edge), setting off within EXIT_SPREAD s of each other, and is removed once there
+const EXIT_SPEED = 2.2, EXIT_MARGIN = 1.5, EXIT_SPREAD = 0.6, EXIT_GIVEUP = 12;   // GIVEUP: removed after this long regardless (s)
+// hover: like Find Mii (design-references/hover-on-mii.png), the person under the cursor gets a big head (scaled
+// HOVER_HEAD× from the neck, eased at HOVER_HEAD_RATE /s) and turns it to look at the camera (up to HOVER_NECK rad
+// off their heading, eased at HOVER_TURN_RATE /s) while they keep walking; their hitbox grows HOVER_HIT× taller
+// with the head so the cursor stays on them
+const HOVER_HEAD = 1.45, HOVER_HEAD_RATE = 16, HOVER_HIT = 1.12, HOVER_NECK = 1.5, HOVER_TURN_RATE = 9;
 const GREET_DIST = 1.7, GREET_CHANCE = 0.5, GREET_CD = [6, 12];   // waving at passers-by
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -46,13 +57,13 @@ const angleLerp = (a, b, t) => { let d = ((b - a + Math.PI) % (Math.PI * 2) + Ma
 
 export class Crowd {
   constructor(scene, area) {
-    this.scene = scene; this.area = area; this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.time = 0;
+    this.scene = scene; this.area = area; this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.time = 0; this.hovered = null;
     this.ceoCount = CEO_TYPES.length;   // the street starts empty: reset() (at the start of a round) brings everyone in
   }
 
   reset() {
     for (const a of this.agents) this.scene.remove(a.person);
-    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; resetFaceDeck(); resetProfileDeck();
+    this.agents = []; this.hitboxes = []; this.groups = []; this.retired = []; this.hovered = null; resetFaceDeck(); resetProfileDeck();
     for (let i = 0; i < NORMALS; i++) this.spawn(randomLook(), 'wander', false, true);
     for (const type of CEO_TYPES) {
       const ceo = this.spawn(ceoLook(type), type.behavior, true, true);
@@ -66,6 +77,26 @@ export class Crowd {
       }
     }
     this.ceoCount = CEO_TYPES.length;
+    this.total = this.agents.length;
+  }
+
+  /** Round over: everyone not frozen walks quickly off the nearer side of the photo and is then removed. */
+  exit() {
+    for (const a of this.agents) {
+      if (a.frozen) continue;
+      if (a.group) this.leaveChat(a, false);
+      a.inspect = null; a.onPresent = null; a.returning = false; a.entering = false; a.hurryT = 0;
+      a.pause = 0; a.pitchT = 0; a.stuckT = 0;
+      const p = a.person.position;
+      a.leaving = true; a.exitDelay = rand(0, EXIT_SPREAD);
+      a.target = this.area.offscreen(p, p.x < 0 ? -1 : 1, EXIT_MARGIN);
+      const i = this.hitboxes.indexOf(a.person.userData.hitbox); if (i >= 0) this.hitboxes.splice(i, 1);
+    }
+  }
+
+  exitStep(a, dt) {
+    if (a.exitDelay > 0) { a.exitDelay -= dt; a.speedNow = 0; return; }
+    if (this.move(a, EXIT_SPEED, dt) || (a.exitT = (a.exitT || 0) + dt) > EXIT_GIVEUP) a.left = true;
   }
 
   /** Add someone. With `enter` they start off the side of the photo and walk in (see enterStep). */
@@ -79,8 +110,8 @@ export class Crowd {
       bumpT: 0, bumpX: 0, bumpZ: 0, stuckT: 0, side: Math.random() < 0.5 ? -1 : 1,
       // social state: chat group, timers for waves / nods / laughs / looking at someone, and the pose overlay
       group: null, inPlace: false, chatWait: 0, socialCd: rand(1, 8), greetCd: rand(0, 4),
-      waveT: 0, nodT: 0, laughT: 0, lookAt: null, lookT: 0, idleLookT: rand(1, 4), idleYaw: 0,
-      fx: { talk: 0, wave: 0, nod: 0, laugh: 0, yaw: 0, hand: Math.random() < 0.5 ? -1 : 1, seed: Math.random() * 10 },
+      waveT: 0, nodT: 0, laughT: 0, braceK: 0, braceAt: -9, flinchT: 0, flinchAmt: 0, flinchDelay: 0, lookAt: null, lookT: 0, idleLookT: rand(1, 4), idleYaw: 0,
+      fx: { talk: 0, wave: 0, nod: 0, laugh: 0, flinch: 0, yaw: 0, hand: Math.random() < 0.5 ? -1 : 1, seed: Math.random() * 10 },
     };
     a.target = this.pickTarget(a);
     if (enter) {                               // walk in from the nearer-ish side, to a spot inside the street
@@ -174,7 +205,7 @@ export class Crowd {
       }
       // pushes can't shove people off the walk area, except off an ice block (clamping them back into the
       // ice would pin them there for good; they walk back in by themselves)
-      for (const a of A) if (!a.frozen && !a.onIce && !a.inspect && !a.returning && !a.entering) this.area.clamp(a.person.position);
+      for (const a of A) if (!a.frozen && !a.onIce && !a.inspect && !a.returning && !a.entering && !a.leaving) this.area.clamp(a.person.position);
     }
   }
 
@@ -201,7 +232,7 @@ export class Crowd {
     const p = a.person.position;
     let best = null, bd = CHAT_RADIUS;
     for (const o of this.agents) {
-      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect || o.entering) continue;
+      if (o === a || o.behavior !== 'wander' || o.frozen || o.inspect || o.entering || o.leaving) continue;
       if (o.group ? (o.group.members.length >= CHAT_MAX || o.group.t < 2) : o.socialCd > 2) continue;
       const d = o.person.position.distanceTo(p);
       if (d < bd) { bd = d; best = o; }
@@ -310,10 +341,19 @@ export class Crowd {
     fx.talk = ease(fx.talk, a.group && a.group.speaker === a && a.inPlace);
     fx.nod = ease(fx.nod, a.nodT > 0);
     fx.laugh = ease(fx.laugh, a.laughT > 0);
+    if (a.flinchDelay > 0) a.flinchDelay -= dt; else if (a.flinchT > 0) a.flinchT -= dt;
+    const brace = this.time - a.braceAt < BRACE_HOLD ? a.braceK : 0;
+    const fl = Math.max(brace, a.flinchT > 0 && !(a.flinchDelay > 0) ? a.flinchAmt : 0);
+    fx.flinch += (fl - fx.flinch) * Math.min(1, dt * (fl > fx.flinch ? FLINCH_IN : FLINCH_OUT));
     // head turn: toward whoever they're looking at, or idle glances around while standing still
-    let yaw = 0;
+    let yaw = 0, rate = 4;
     if (a.inspect) a.lookAt = null;                                            // eyes front for the ID check
-    else if (a.lookAt && !a.lookAt.frozen) {
+    else if (a === this.hovered) {                                             // hovered: look at the camera (at the origin)
+      const p = a.person.position;
+      let rel = Math.atan2(-p.x, -p.z) - a.heading;
+      rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+      yaw = Math.max(-HOVER_NECK, Math.min(HOVER_NECK, rel)); rate = HOVER_TURN_RATE;
+    } else if (a.lookAt && !a.lookAt.frozen) {
       const p = a.person.position, q = a.lookAt.person.position;
       let rel = Math.atan2(q.x - p.x, q.z - p.z) - a.heading;
       rel = Math.atan2(Math.sin(rel), Math.cos(rel));
@@ -322,7 +362,7 @@ export class Crowd {
       if ((a.idleLookT -= dt) <= 0) { a.idleLookT = rand(1.2, 3.5); a.idleYaw = Math.random() < 0.35 ? 0 : rand(-0.8, 0.8); }
       yaw = a.idleYaw;
     }
-    fx.yaw += (yaw - fx.yaw) * Math.min(1, dt * 4);
+    fx.yaw += (yaw - fx.yaw) * Math.min(1, dt * rate);
   }
 
   update(dt) {
@@ -338,7 +378,8 @@ export class Crowd {
       }
       a.mode = 'walk'; a.px = person.position.x; a.pz = person.position.z;
       if (a.hurryT > 0) a.hurryT -= dt;
-      if (a.inspect) this.inspectStep(a, dt);
+      if (a.leaving) this.exitStep(a, dt);
+      else if (a.inspect) this.inspectStep(a, dt);
       else if (a.entering && a.behavior !== 'follow') this.enterStep(a, dt);
       else if (a.group) this.chat(a, dt);
       else if (a.behavior === 'follow' && a.leader.inspect) a.speedNow = 0;     // assistants wait while their boss is checked
@@ -366,7 +407,7 @@ export class Crowd {
           }
           a.pitchCd -= dt;
           if (a.pitchCd <= 0) {
-            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && !o.entering && o.person.position.distanceTo(person.position) < 1.8);
+            const mark = this.agents.find((o) => o !== a && !o.frozen && !o.inspect && !o.entering && !o.leaving && o.person.position.distanceTo(person.position) < 1.8);
             if (mark) {
               a.pitchTo = mark; a.pitchT = rand(2.5, 3.5); a.pitchCd = rand(4, 7);
               if (mark.behavior === 'wander' && !mark.group) mark.pause = a.pitchT;
@@ -399,15 +440,24 @@ export class Crowd {
         const h = a.heading, lz = a.bumpX * Math.sin(h) + a.bumpZ * Math.cos(h), lx = a.bumpX * Math.cos(h) - a.bumpZ * Math.sin(h);
         body.rotation.x += lz * k; body.rotation.z -= lx * k;
       }
+      if (a.fx.flinch > 0.01) {                // cowering: lean back a little and tremble
+        body.rotation.x -= 0.14 * a.fx.flinch;
+        body.rotation.z += Math.sin(this.time * 47 + a.fx.seed) * 0.025 * a.fx.flinch;
+      }
       if (a.shakeT > 0) { a.shakeT -= dt; body.rotation.z += Math.sin(this.time * 60) * 0.18 * (a.shakeT / 0.4); }
     }
     this.collide();
+    if (this.agents.some((a) => a.left)) {                               // walked off the photo at the end of a round
+      for (const a of this.agents) if (a.left) this.scene.remove(a.person);
+      this.agents = this.agents.filter((a) => !a.left);
+    }
     for (const a of this.agents) if (a.returning && this.area.contains(a.person.position, 0.3)) a.returning = false;   // back in the crowd
     for (const a of this.agents) {                                       // walked onto the street: start their usual routine
       if (!a.entering || a.inspect || !this.area.contains(a.person.position, 0.6)) continue;
       if (a.behavior === 'follow' && a.leader.entering) continue;
       a.entering = false; this.startBehavior(a);
     }
+    for (const a of this.agents) this.headZoomStep(a, dt);
     // stuck check: walking but barely getting anywhere (pinned against people or ice)
     for (const a of this.agents) {
       if (a.frozen || a.px === undefined) continue;
@@ -446,6 +496,21 @@ export class Crowd {
     a.hurryT = RELEASE_HURRY;                                            // hurry back out of the way
     a.target = a.behavior === 'pace' ? a.paceA : a.home.clone();
     a.socialCd = Math.max(a.socialCd, 4);
+  }
+
+  /** The player's punch is nearly there: `a` cowers by k (0..1). Keep calling while it changes; it relaxes once it stops. */
+  brace(a, k) { a.braceK = k; a.braceAt = this.time; }
+
+  /** The snowball is in the air: `a` cowers fully for `time` s, and people nearby flinch too (less, the further away). */
+  flinch(a, time) {
+    a.flinchT = time; a.flinchAmt = 1; a.flinchDelay = 0;
+    const p = a.person.position;
+    for (const o of this.agents) {
+      if (o === a || o.frozen || o.leaving) continue;
+      const d = o.person.position.distanceTo(p);
+      if (d > FLINCH_NEAR) continue;
+      o.flinchAmt = FLINCH_NEAR_AMT * (1 - d / FLINCH_NEAR) + 0.15; o.flinchDelay = rand(0.05, 0.2); o.flinchT = time + rand(0.2, 0.5);
+    }
   }
 
   /** Freeze someone being inspected; after `delay` s the ice block slowly heads off into the distance and fades. */
@@ -496,6 +561,18 @@ export class Crowd {
     return hit ? hit.object.userData.agent : null;
   }
 
+  /** The person under the cursor (or null): their head swells up, Find Mii style. */
+  setHover(a) { this.hovered = a && !a.frozen ? a : null; }
+
+  headZoomStep(a, dt) {
+    const want = a === this.hovered ? HOVER_HEAD : 1, z = a.headZoom ?? 1;
+    if (z === want) return;
+    a.headZoom = Math.abs(want - z) < 0.002 ? want : z + (want - z) * Math.min(1, dt * HOVER_HEAD_RATE);
+    const ud = a.person.userData, k = a.headZoom;
+    ud.headFrame.scale.set((ud.look.headWidth || 1) * k, k, k);
+    ud.hitbox.scale.y = 1 + (HOVER_HIT - 1) * (k - 1) / (HOVER_HEAD - 1);
+  }
+
   setHighlight(a, on) { if (a && !a.frozen) a.person.userData.setOutline(on ? HIGHLIGHT : a.released ? RELEASED_OUTLINE : null); }
 
   /** Mark someone the player checked and let go: a green wash over them (face included) and a mint outline. */
@@ -509,7 +586,9 @@ export class Crowd {
   freeze(a) {
     a.frozen = true; a.freezeT = 0;
     a.block = encase(a.person);
-    pose(a.person, 0, 0, a.mode === 'pitch' ? 'pitch' : a.mode, this.time);
+    // stand still, but keep any flinch: they're frozen cowering behind their arms
+    const { flinch, hand, seed } = a.fx;
+    pose(a.person, 0, 0, a.mode === 'pitch' ? 'pitch' : a.mode, this.time, { talk: 0, wave: 0, nod: 0, laugh: 0, yaw: 0, flinch, hand, seed });
   }
 
   shake(a) { a.shakeT = 0.4; }

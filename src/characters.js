@@ -404,6 +404,7 @@ const qUpL = new THREE.Quaternion(), qUpR = new THREE.Quaternion(), qLoL = new T
  * Pose for one frame.
  * phase: walk-cycle phase · amp: 0 (standing) … 1 (full stride)
  * mode: 'walk' | 'phone' (head down, as if reading) | 'pitch' (both arms waving)
+ * fx.flinch (0..1) cowers over everything else: forearms up in front of the face, head ducked and turned away, knees bent.
  * Arm angles are for an arm hanging straight down: x swings it forward (−) / back (+), z lifts it
  * outward (− on the left arm, + on the right). Each arm has an upper (u) and a forearm (f) angle.
  */
@@ -430,7 +431,7 @@ export function pose(person, phase, amp, mode, t, fx) {
     hx = Math.sin(t * 4.5) * 0.12;
   }
   // social overlay from crowd.js (all 0..1, eased): talking gestures, waving, nodding, laughing, head turn
-  let yaw = 0;
+  const yaw = fx ? fx.yaw : 0;                       // head turn (also while pitching, so a hovered pitcher looks at the camera)
   if (fx && mode !== 'pitch') {
     const mix = (A, to, k) => { for (const key in to) A[key] += (to[key] - A[key]) * k; };
     if (fx.talk > 0.01) {                            // one hand gestures in front of the chest, head bobs
@@ -448,14 +449,22 @@ export function pose(person, phase, amp, mode, t, fx) {
       body.position.y += Math.abs(Math.sin(t * 15)) * 0.03 * fx.laugh;
       if (!person.userData.twoHand) mix(L, { ux: -0.4, uz: -0.05, fx: -1.5, fz: 0.5 }, fx.laugh);
     }
-    yaw = fx.yaw;
+  }
+  let turn = 0;
+  if (fx && fx.flinch > 0.01) {                      // cower: shield the face with both forearms, duck, turn away
+    const k = fx.flinch, j = Math.sin(t * 41 + fx.seed) * 0.04 * k;
+    const mix = (A, to) => { for (const key in to) A[key] += (to[key] - A[key]) * k; };
+    mix(L, { ux: -1.4 + j, uz: -0.35, fx: -2.95 + j, fz: 0.5 });
+    mix(R, { ux: -1.4 - j, uz: 0.35, fx: -2.95 - j, fz: -0.5 });
+    hx += (0.32 - hx) * k; turn = 0.45 * fx.hand * k;
+    body.position.y -= 0.05 * k;
   }
   setBone(legL, s * 0.6, 0, 0); setBone(legR, -s * 0.6, 0, 0);
   armRot(-1, L.ux, L.uz, qUpL); armRot(-1, L.fx, L.fz, qLoL);
   armRot(1, R.ux, R.uz, qUpR); armRot(1, R.fx, R.fz, qLoR);
   setBone(armL, 0, 0, 0, qUpL); setChildBone(foreL, qUpL, qLoL);
   setBone(armR, 0, 0, 0, qUpR); setChildBone(foreR, qUpR, qLoR);
-  setBone(head, hx, yaw, 0);
+  setBone(head, hx, yaw + turn, 0);
 }
 
 /** Encase a person in ice: tint them icy and add a translucent block. Returns the block (scale it in). */

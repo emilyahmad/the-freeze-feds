@@ -1,26 +1,108 @@
-// Freeze Feds: the original game, as a mode. Hover anyone to inspect them; click someone to call them up to the
-// camera and show their LinkedIn-style profile; click them again to freeze them and send them off down the street
-// (right or wrong), anywhere else to let them go. Right catch +BONUS s, wrong −PENALTY s; ends at 0 s or when every CEO is frozen.
-import { hud, popup, snowBurst, wrongFlash } from '../ui.js';
+// Freeze Feds: the original game, as a mode. Hover anyone to see their head up close (it swells, Find Mii style); click someone to call them up to the
+// camera and show their LinkedIn-style profile; hit Freeze under the phone to open the webcam, then punch a fist toward
+// it to throw a snowball that freezes them and sends them off down the street (right or wrong); click anywhere else to
+// let them go. Right catch +BONUS s, wrong −PENALTY s; ends at 0 s or when every CEO is frozen.
+// The clock is paused while the webcam is open. If the camera can't start, the button freezes them directly.
+import * as THREE from 'three';
+import { hud, popup, snowBurst, snowBack, wrongFlash } from '../ui.js';
 import * as sfx from '../sfx.js';
+import { ThrowCam, preloadHands } from '../throwcam.js';
 
 export const ROUND_TIME = 60;
 const BONUS = 10, PENALTY = 10;
+const SNOWBALL_TIME = 0.45;   // flight time of the thrown snowball (s)
+const BRACE_FROM = 0.45;      // they start to cower once the punch is this far along (0..1 of the camera's meter)
+
+let cam = null, noCam = false;   // one webcam panel for the page; noCam once the camera has failed to start
+const _v = new THREE.Vector3();
 
 export function createFreeze(ctx, { time = ROUND_TIME, onDone }) {
-  const { crowd, card, profile, raycaster, ndc, camera, canvas } = ctx;
+  const { crowd, profile, raycaster, ndc, camera, canvas, size } = ctx;
   let timeLeft = time, caught = 0, wrong = 0, lastTick = 0, active = true;
-  let checking = null, deciding = false, needPhoto = false, hovered = null;
+  let checking = null, deciding = false, needPhoto = false, hovered = null, splatted = false;
   const frozen = [];
 
   sfx.unlock();
   crowd.reset();
   hud.timer(timeLeft); hud.caught(0, crowd.ceoCount); hud.show(true);
+  cam ??= new ThrowCam();
+  if (!noCam) preloadHands().catch(() => {});      // warm up the hand tracker so the first Freeze opens quickly
+  const freezeBtn = document.querySelector('#pf-freeze');
+  freezeBtn.onclick = (e) => { e.stopPropagation(); openCam(); };
+  const setButton = (on) => { freezeBtn.disabled = !on; freezeBtn.textContent = noCam ? '❄ Freeze (no camera)' : '❄ Freeze'; };
+
+  /** Freeze button: open the webcam and wait for the punch (or, with no camera, throw right away). */
+  function openCam() {
+    if (!checking || deciding || !active) return;
+    const a = checking;
+    if (noCam) { throwAt(a); return; }
+    setButton(false);
+    cam.open({
+      onThrow: () => { if (checking === a && !deciding && active) throwAt(a); },
+      onCharge: (f) => {                    // nearly punched: they see it coming and start to cower
+        if (checking !== a || deciding) return;
+        const k = Math.max(0, (f - BRACE_FROM) / (1 - BRACE_FROM));
+        crowd.brace(a, k * k * (3 - 2 * k));
+      },
+      onCancel: () => { if (checking === a && !deciding) setButton(true); },
+      onError: () => { noCam = true; if (checking === a && !deciding) setButton(true); },
+    });
+  }
+
+  /** Where the person's head is on screen (stage px). */
+  function headOnScreen(a) {
+    const { headFrame, eyeY } = a.person.userData;
+    a.person.updateMatrixWorld(true);
+    headFrame.localToWorld(_v.set(0, eyeY, 0)).project(camera);
+    const { w, h } = size();
+    return { x: (_v.x + 1) / 2 * w, y: (1 - _v.y) / 2 * h };
+  }
+
+  /** A snowball flies up from the bottom of the screen and freezes them on impact. */
+  function throwAt(a) {
+    deciding = true; setButton(false);
+    crowd.flinch(a, SNOWBALL_TIME + 0.3);   // cower until it lands (frozen mid-flinch), and the people nearby duck too
+    const { w, h } = size(), to = headOnScreen(a), from = { x: w * 0.55, y: h + 40 };
+    const el = Object.assign(document.createElement('div'), { className: 'snowball' });
+    document.querySelector('#fx').append(el);
+    const frames = [];
+    for (let i = 0; i <= 10; i++) {
+      const t = i / 10, x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t - Math.sin(t * Math.PI) * h * 0.12;
+      frames.push({ transform: `translate(${x}px, ${y}px) scale(${1.6 - 1.1 * t}) rotate(${t * 300}deg)` });
+    }
+    el.animate(frames, { duration: SNOWBALL_TIME * 1000, easing: 'cubic-bezier(.3, .4, .6, 1)' }).onfinish = () => {
+      el.remove();
+      if (checking === a && active) hit(a, headOnScreen(a));
+      else deciding = false;
+    };
+  }
+
+  /** The snowball lands: freeze them (right or wrong) with the stamp on the phone. */
+  function hit(a, at) {
+    crowd.freezeAndSendOff(a, 1.0); snowBurst(at.x, at.y); sfx.freeze();
+    if (a.isCEO) {
+      caught++; timeLeft += BONUS; frozen.push(a);
+      popup(at.x, at.y, `❄ ${a.name} +${BONUS}s`, 'good');
+      hud.caught(caught, crowd.ceoCount);
+      endCheck('frozen', a.name, 1.3);
+    } else {
+      // wrong person: they're frozen and sent off all the same, but it costs PENALTY seconds
+      timeLeft = Math.max(0, timeLeft - PENALTY); wrong++;
+      popup(at.x, at.y, `❄ Innocent! −${PENALTY}s`, 'bad'); wrongFlash(); sfx.wrong();
+      // ...and their snowball comes right back at the player, splats over the screen and slides off (clock paused meanwhile)
+      splatted = true;
+      setTimeout(() => {
+        sfx.whoosh();
+        snowBack(at, { text: `Innocent! −${PENALTY}s`, onImpact: () => sfx.splat(), onDone: () => { splatted = false; } });
+      }, 180);
+      endCheck('innocent', `−${PENALTY}s`, 1.3);
+    }
+  }
 
   function startCheck(a) {
     checking = a; deciding = false;
-    crowd.setHighlight(hovered, false); hovered = null; card.show(null);
-    profile.open(a);
+    crowd.setHighlight(hovered, false); hovered = null; crowd.setHover(null);
+    profile.open(a); setButton(true);
     crowd.inspect(a, () => { needPhoto = true; });   // profile photo once they're standing in front of the camera
   }
 
@@ -39,20 +121,23 @@ export function createFreeze(ctx, { time = ROUND_TIME, onDone }) {
   function releaseNow(next) {
     const a = checking;
     checking = null; deciding = false; needPhoto = false;
+    cam.close();
     if (!a.frozen) { crowd.release(a); crowd.markReleased(a); }
     profile.close(0);
     if (next && !next.frozen) startCheck(next);
   }
 
   function cancelCheck() {                          // round over / quit: drop everything immediately
+    cam.close();
     if (checking && !checking.frozen) crowd.release(checking);
     checking = null; deciding = false; needPhoto = false; profile.close(0);
   }
 
   function end(won) {
     if (!active) return;
-    active = false; cancelCheck(); card.show(null); crowd.setHighlight(hovered, false); hovered = null;
-    sfx.end(won);
+    active = false; cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); hovered = null;
+    crowd.exit();                                   // everyone heads off the street
+    sfx.end(won); sfx.duckMurmur(false);
     const bosses = [...crowd.agents, ...crowd.retired].filter((a) => a.isCEO);   // incl. frozen ones already sent off
     onDone?.({ won, caught, wrong, timeLeft: Math.max(0, timeLeft), ceoCount: crowd.ceoCount,
       frozen, escaped: bosses.filter((a) => !a.frozen) });
@@ -60,11 +145,13 @@ export function createFreeze(ctx, { time = ROUND_TIME, onDone }) {
 
   return {
     startCheck, endCheck: (k) => endCheck(k, null, 0.6),
+    throwNow: () => checking && !deciding && throwAt(checking),   // skip the webcam (console / ?debug)
 
     update(dt) {
       if (needPhoto && checking) { needPhoto = false; profile.photo(); }
+      sfx.duckMurmur(active && checking?.inspect === 'present');   // chatter dips once they're up at the camera
       if (!active) return;
-      timeLeft -= dt;
+      if (!cam.isOpen && !splatted) timeLeft -= dt;  // the clock waits while they line up a throw, or can't see
       const s = Math.ceil(timeLeft);
       if (s <= 10 && s > 0 && s !== lastTick) { lastTick = s; sfx.tick(); }
       hud.timer(Math.max(0, timeLeft));
@@ -77,8 +164,7 @@ export function createFreeze(ctx, { time = ROUND_TIME, onDone }) {
       if (checking) a = a === checking ? a : null;   // during an ID check only the person being checked is clickable
       if (a !== hovered) { crowd.setHighlight(hovered, false); crowd.setHighlight(a, true); hovered = a; }
       canvas.className = active ? (a ? 'on-person' : 'pointing') : '';
-      if (checking) card.show(null);
-      else { const { w, h } = ctx.size(); card.show(a, pointer?.x, pointer?.y, w, h); }
+      crowd.setHover(checking ? null : a);          // big head on hover (not on the person already up at the camera)
     },
 
     down(pointer) {
@@ -87,25 +173,14 @@ export function createFreeze(ctx, { time = ROUND_TIME, onDone }) {
       const a = crowd.pick(raycaster);
       if (checking) {
         if (deciding) return;                                     // a stamp is already coming down
-        if (a !== checking) { releaseNow(a); return; }   // clicked off them: let them go at once (and check whoever was clicked)
-        if (a.isCEO) {
-          crowd.freezeAndSendOff(a, 1.0); caught++; timeLeft += BONUS; frozen.push(a);
-          popup(pointer.x, pointer.y, `❄ ${a.name} +${BONUS}s`, 'good'); snowBurst(pointer.x, pointer.y); sfx.freeze();
-          hud.caught(caught, crowd.ceoCount);
-          endCheck('frozen', a.name, 1.3);
-        } else {
-          // wrong person: they're frozen and sent off all the same, but it costs PENALTY seconds
-          crowd.freezeAndSendOff(a, 1.0); timeLeft = Math.max(0, timeLeft - PENALTY); wrong++;
-          popup(pointer.x, pointer.y, `❄ Innocent! −${PENALTY}s`, 'bad'); snowBurst(pointer.x, pointer.y); wrongFlash(); sfx.freeze(); sfx.wrong();
-          endCheck('innocent', `−${PENALTY}s`, 1.3);
-        }
-        return;
+        if (a !== checking) releaseNow(a);   // clicked off them: let them go at once (and check whoever was clicked)
+        return;                              // clicking them again does nothing: the Freeze button throws the snowball
       }
       if (!a || a.frozen) return;
       startCheck(a);
     },
 
     /** Quit without a result (back to the home screen). */
-    stop() { active = false; cancelCheck(); card.show(null); crowd.setHighlight(hovered, false); },
+    stop() { active = false; sfx.duckMurmur(false); cancelCheck(); crowd.setHover(null); crowd.setHighlight(hovered, false); },
   };
 }

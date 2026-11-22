@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>The Freeze Feds</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet" />
 </head>
@@ -34,23 +35,41 @@
     </div>
 
 
-    <div id="card" hidden>
-      <canvas id="card-pic" width="160" height="160"></canvas>
-      <div id="card-text"></div>
-    </div>
-
     <!-- ID check: the clicked person walks up to the camera and holds up their profile on a phone
          (a LinkedIn-style profile, styled after design-references/linkedin.png) -->
     <div id="profile" hidden>
+      <!-- icons: inline SVG symbols (no emoji), used with <svg><use href="#i-…"/></svg> -->
+      <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+        <symbol id="i-bell" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></symbol>
+        <symbol id="i-home" viewBox="0 0 24 24"><path d="M23 9v2h-2v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9H1V9l11-7z"/></symbol>
+        <symbol id="i-video" viewBox="0 0 24 24"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-9 13.5v-9l7 4.5-7 4.5z"/></symbol>
+        <symbol id="i-network" viewBox="0 0 24 24"><path d="M12 16v6H3v-6a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3zm5.5-3A3.5 3.5 0 1 0 14 9.5a3.5 3.5 0 0 0 3.5 3.5zm1 2h-2a2.5 2.5 0 0 0-2.5 2.5V22h7v-4.5a2.5 2.5 0 0 0-2.5-2.5zM7.5 2A4.5 4.5 0 1 0 12 6.5 4.49 4.49 0 0 0 7.5 2z"/></symbol>
+        <symbol id="i-jobs" viewBox="0 0 24 24"><path d="M17 6V5a3 3 0 0 0-3-3h-4a3 3 0 0 0-3 3v1H2v4a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3V6zM9 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1H9zm10 9a4 4 0 0 0 3-1.38V17a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-4.38A4 4 0 0 0 5 14z"/></symbol>
+        <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 0 10l7.66 4.26L16 8l-6.26 8.34L14 24z"/></symbol>
+        <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></symbol>
+        <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20.5 8.6 16.4a5.4 5.4 0 0 1 6.8 0zM5.9 13.2 4 10.9a12.4 12.4 0 0 1 16 0l-1.9 2.3a9.5 9.5 0 0 0-12.2 0zM2.8 9.4 1 7.1a17.4 17.4 0 0 1 22 0l-1.8 2.3a14.5 14.5 0 0 0-18.4 0z"/></symbol>
+        <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 2c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7zm6.5 11c.3 2.2 1.1 3 3.3 3.3-2.2.3-3 1.1-3.3 3.3-.3-2.2-1.1-3-3.3-3.3 2.2-.3 3-1.1 3.3-3.3z"/></symbol>
+        <symbol id="i-in" viewBox="0 0 24 24"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zm1.78 13.02H3.56V9h3.56zM22.23 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></symbol>
+        <symbol id="i-calendar" viewBox="0 0 48 48"><rect x="4" y="7" width="40" height="37" rx="5" fill="#dce6f1"/><path d="M4 12a5 5 0 0 1 5-5h30a5 5 0 0 1 5 5v5H4z" fill="#378fe9"/><rect x="13" y="3" width="4" height="9" rx="2" fill="#5e6b78"/><rect x="31" y="3" width="4" height="9" rx="2" fill="#5e6b78"/><g fill="#7f8c99"><rect x="10" y="22" width="6" height="5" rx="1"/><rect x="21" y="22" width="6" height="5" rx="1"/><rect x="32" y="22" width="6" height="5" rx="1"/><rect x="10" y="31" width="6" height="5" rx="1"/><rect x="21" y="31" width="6" height="5" rx="1"/></g><rect x="32" y="31" width="6" height="5" rx="1" fill="#e06847"/></symbol>
+      </svg>
       <div class="ph">
         <div class="ph-screen">
-          <div class="ph-status"><span>9:41</span><span>◔ ▮</span></div>
-          <div class="ph-search"><span>←</span><div>🔍 I'm looking for…</div></div>
+          <div class="ph-island"></div>
+          <div class="ph-status">
+            <span id="pf-clock">9:41</span>
+            <span class="ph-sys"><svg class="ic"><use href="#i-wifi"/></svg><span class="ph-batt"><i></i></span></span>
+          </div>
+          <div class="ph-search">
+            <svg class="ic"><use href="#i-back"/></svg>
+            <div><svg class="ic"><use href="#i-search"/></svg>I'm looking for…</div>
+          </div>
           <div class="ph-scroll">
             <div id="pf-banner"></div>
             <div class="pf-head">
               <canvas id="pf-photo" width="200" height="200"></canvas>
-              <div class="pf-icons"><span class="pf-in">in</span><span>🔔</span></div>
+              <div class="pf-icons"><svg class="ic pf-in"><use href="#i-in"/></svg><svg class="ic"><use href="#i-bell"/></svg></div>
             </div>
             <div class="pf-main">
               <div id="pf-headline"></div>
@@ -58,7 +77,10 @@
               <div class="pf-loc">San Francisco, California, United States</div>
               <div class="pf-stats"><span id="pf-followers"></span> · <a id="pf-conn"></a></div>
               <div class="pf-mutual"><span class="pf-dots"><i></i><i></i></span><span id="pf-mutual"></span></div>
-              <div class="pf-btns"><div class="pf-msg">➤ Message</div><div class="pf-more">⋯</div></div>
+              <div class="pf-btns">
+                <div class="pf-msg"><svg class="ic"><use href="#i-send"/></svg>Message</div>
+                <div class="pf-more"><svg class="ic"><use href="#i-more"/></svg></div>
+              </div>
               <div class="pf-site">Visit my website</div>
             </div>
             <div class="pf-sec">
@@ -67,13 +89,45 @@
             </div>
             <div class="pf-sec">
               <h4>Highlights</h4>
-              <div class="pf-hl"><span class="pf-hl-ic">📅</span><div id="pf-hl"></div></div>
+              <div class="pf-hl">
+                <svg class="pf-hl-ic"><use href="#i-calendar"/></svg>
+                <div><div id="pf-hl"></div><div class="pf-ask"><svg class="ic"><use href="#i-sparkle"/></svg>Ask about experience</div></div>
+              </div>
             </div>
+            <div class="pf-sec">
+              <h4>Experience</h4>
+              <div class="pf-item"><i class="pf-logo" id="pf-xp-logo"></i><div><div class="pf-t" id="pf-xp-title"></div><div id="pf-xp-org"></div><div class="pf-sub" id="pf-xp-time"></div></div></div>
+            </div>
+            <div class="pf-sec">
+              <h4>Education</h4>
+              <div class="pf-item"><i class="pf-logo pf-school" id="pf-ed-logo"></i><div><div class="pf-t" id="pf-ed-school"></div><div id="pf-ed-deg"></div><div class="pf-sub" id="pf-ed-time"></div></div></div>
+            </div>
+            <div class="pf-end"></div>
           </div>
-          <div class="ph-nav"><span>🏠<br>Home</span><span>▶<br>Video</span><span>👥<br>My Network</span><span>🔔<br>Notifications</span><span>💼<br>Jobs</span></div>
+          <div class="ph-nav">
+            <span class="on"><svg class="ic"><use href="#i-home"/></svg>Home</span>
+            <span><svg class="ic"><use href="#i-video"/></svg>Video</span>
+            <span><svg class="ic"><use href="#i-network"/></svg>My Network</span>
+            <span><svg class="ic"><use href="#i-bell"/></svg>Notifications</span>
+            <span><svg class="ic"><use href="#i-jobs"/></svg>Jobs</span>
+          </div>
+          <div class="ph-home"></div>
           <div id="pf-stamp"></div>
         </div>
       </div>
+      <!-- opens the webcam: make a fist and punch toward the camera to throw a snowball (src/throwcam.js) -->
+      <button id="pf-freeze" type="button">❄ Freeze</button>
+    </div>
+
+    <!-- snowball cam: the webcam preview with the tracked hand drawn over it -->
+    <div id="throwcam" hidden>
+      <div class="tc-view">
+        <video id="tc-video" playsinline muted></video>
+        <canvas id="tc-hands"></canvas>
+        <button id="tc-close" type="button" title="Close camera">✕</button>
+      </div>
+      <div id="tc-msg"></div>
+      <div id="tc-meter"><i></i></div>
     </div>
 
     <div id="debug-info" hidden></div>
@@ -83,7 +137,7 @@
         <h1>❄ The Freeze Feds ❄</h1>
         <p>Nine tech CEOs are loose on California &amp; Powell, and it's up to you to catch them in a scandalous act! Hover over anyone to inspect their activity, and click a CEO to freeze them in ice.</p>
         <ul>
-          <li>Click someone to check their ID, then click them again to freeze them, or anywhere else to let them go.</li>
+          <li>Click someone to check their ID, then hit <b>Freeze</b> and punch your fist toward your webcam to throw a snowball, or click anywhere else to let them go.</li>
           <li>Right catch: <b>+10 s</b></li>
           <li>Wrong person: <b>−10 s</b></li>
           <li>Watch how people move. The CEOs don't walk like everyone else.</li>
