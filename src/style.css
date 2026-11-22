@@ -62,7 +62,7 @@ body {
 
 /* ---- start / end screens ---- */
 .screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(40, 25, 90, .35); backdrop-filter: blur(2px); z-index: 10; }
-.screen[hidden], #hud[hidden], #card[hidden], #debug-info[hidden] { display: none; }
+.screen[hidden], #hud[hidden], #card[hidden], #debug-info[hidden], #profile[hidden] { display: none; }
 .panel {
   max-width: 470px; width: 100%; text-align: center; background: var(--card); border: 3px solid #fff; border-radius: 28px;
   padding: 22px 26px; box-shadow: 0 14px 40px var(--plum), inset 0 -5px 0 rgba(201, 181, 255, .5);
@@ -76,3 +76,71 @@ button.go {
   box-shadow: 0 4px 0 var(--ink), 0 8px 16px rgba(60, 30, 140, .3); transition: transform .1s;
 }
 button.go:hover { transform: translateY(-2px) scale(1.03); }
+
+/* ---- ID check: LinkedIn-style profile on a phone (after design-references/linkedin.png) ---- */
+/* sized from the stage width (--sw, set in main.js) so it scales with the letterboxed stage */
+#profile {
+  position: absolute; left: 3.5%; top: 3%; width: 24em; z-index: 5; pointer-events: none;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: calc(var(--sw, 1600px) * 0.0086); color: #e9e9ea;
+  animation: pp-in .45s cubic-bezier(.2, .9, .3, 1.15);
+}
+#profile.out { animation: pp-out .35s ease-in forwards; }
+@keyframes pp-in { from { transform: translate(-60%, 30%) rotate(-14deg); opacity: 0; } to { transform: rotate(-3deg); opacity: 1; } }
+@keyframes pp-out { from { transform: rotate(-3deg); opacity: 1; } to { transform: translate(-60%, 40%) rotate(-12deg); opacity: 0; } }
+#profile:not(.out) { transform: rotate(-3deg); }
+.ph {
+  background: #1b1b1f; border-radius: 3.4em; padding: .75em;
+  box-shadow: 0 1.4em 2.8em rgba(20, 10, 50, .45), inset 0 0 0 .22em #4a4a52, inset 0 0 0 .4em #111;
+}
+.ph-screen { position: relative; height: 49em; border-radius: 2.7em; overflow: hidden; background: #1d2226; display: flex; flex-direction: column; }
+.ph-status { display: flex; justify-content: space-between; align-items: center; padding: .9em 1.9em .3em; font-size: .95em; font-weight: 600; color: #fff; }
+.ph-island { width: 6.5em; height: 1.9em; background: #000; border-radius: 999px; }
+.ph-search { display: flex; gap: .8em; align-items: center; padding: .35em 1.1em .7em; background: #1d2226; }
+.ph-search div { flex: 1; background: #38434f; color: #b0b7bf; border-radius: .4em; padding: .35em .7em; font-size: .95em; }
+.ph-scroll { flex: 1; overflow: hidden; background: #000; }
+#pf-banner {
+  height: 5.2em; display: flex; align-items: flex-start; justify-content: flex-end; padding: .8em 1.2em 0 9.6em;
+  font-weight: 800; font-size: 1.05em; line-height: 1.15; text-align: right; color: #fff; text-shadow: 0 .1em .3em rgba(0,0,0,.4);
+}
+.pf-head { position: relative; background: #1d2226; height: 3.2em; }
+#pf-photo { position: absolute; left: 1.1em; top: -4.3em; width: 7.6em; height: 7.6em; border-radius: 50%; border: .3em solid #1d2226; background: #e9e5f2; }
+.pf-icons { position: absolute; right: 1.2em; top: .7em; display: flex; gap: 1.1em; font-size: 1.05em; }
+.pf-in { background: #c37d16; color: #1d2226; font-weight: 800; border-radius: .2em; padding: 0 .25em; font-size: .9em; line-height: 1.35; }
+.pf-main { background: #1d2226; padding: .4em 1.2em 1em; font-size: .95em; line-height: 1.3; }
+.pf-name { color: #b0b7bf; font-size: .95em; }
+.pf-name b { color: #fff; font-size: 1.55em; font-weight: 700; }
+.pf-badge { display: inline-block; font-size: .8em; border: .12em solid #b0b7bf; border-radius: .3em; padding: 0 .2em; line-height: 1.2; }
+#pf-headline { color: #fff; margin: .25em 0 .15em; }
+#pf-edu { color: #e9e9ea; font-size: .92em; }
+.pf-loc { color: #a0a8b0; font-size: .92em; margin-top: .1em; }
+.pf-stats { margin-top: .2em; font-size: .92em; color: #e9e9ea; }
+.pf-stats a { color: #71b7fb; font-weight: 600; }
+.pf-mutual { display: flex; align-items: center; gap: .4em; margin-top: .35em; font-size: .85em; color: #a0a8b0; }
+.pf-dots { display: flex; } .pf-dots i { width: 1.3em; height: 1.3em; border-radius: 50%; background: #8c6fe0; border: .12em solid #1d2226; }
+.pf-dots i + i { margin-left: -.45em; background: #e0a060; }
+.pf-btns { display: flex; gap: .5em; margin-top: .75em; }
+.pf-msg { flex: 1; text-align: center; background: #71b7fb; color: #0d1b2a; font-weight: 700; border-radius: 999px; padding: .4em; }
+.pf-more { width: 2.1em; text-align: center; border: .12em solid #a0a8b0; border-radius: 50%; color: #a0a8b0; line-height: 1.7; }
+.pf-site { margin-top: .5em; text-align: center; border: .12em solid #71b7fb; color: #71b7fb; font-weight: 700; border-radius: 999px; padding: .32em; }
+.pf-sec { background: #1d2226; margin-top: .45em; padding: .8em 1.2em; font-size: .92em; line-height: 1.35; }
+.pf-sec h4 { margin: 0 0 .35em; font-size: 1.2em; color: #fff; }
+#pf-about { color: #d0d4d8; }
+.pf-hl { display: flex; gap: .7em; align-items: flex-start; color: #e9e9ea; }
+.pf-hl-ic { font-size: 1.6em; line-height: 1; }
+.ph-nav { display: flex; justify-content: space-around; padding: .55em .5em 1.3em; background: #1d2226; border-top: .08em solid #38434f; font-size: .72em; text-align: center; color: #a0a8b0; line-height: 1.5; }
+.ph-nav span:first-child { color: #fff; }
+.pp-hint {
+  margin-top: .9em; text-align: center; font-family: Fredoka, system-ui, sans-serif; font-size: 1.15em; color: #fff;
+  background: rgba(40, 25, 90, .6); padding: .35em .8em; border-radius: 999px;
+}
+/* stamps across the phone screen */
+#pf-stamp {
+  position: absolute; left: 50%; top: 38%; translate: -50% -50%;
+  font-family: Oswald, 'Arial Narrow', sans-serif; font-size: 2.5em; font-weight: 600; letter-spacing: .05em; padding: .05em .45em;
+  border: .14em solid currentColor; border-radius: .2em; background: rgba(255, 255, 255, .88);
+  text-align: center; line-height: 1.1; white-space: nowrap; transform: rotate(-12deg); opacity: 0;
+}
+#pf-stamp small { display: block; font-size: .4em; letter-spacing: 0; font-weight: 500; }
+#pf-stamp.on { animation: stamp .3s cubic-bezier(.3, 1.6, .5, 1) forwards; }
+#pf-stamp.frozen { color: #1f7fc4; } #pf-stamp.innocent { color: #d8283c; } #pf-stamp.released { color: #2f9f5a; }
+@keyframes stamp { from { opacity: 0; transform: rotate(-12deg) scale(2.2); } to { opacity: .95; transform: rotate(-12deg) scale(1); } }

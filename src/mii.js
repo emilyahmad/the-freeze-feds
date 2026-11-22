@@ -9,6 +9,19 @@ import { mergeVertices, deinterleaveGeometry } from 'three/addons/utils/BufferGe
 // two hats. Heads/hair/hats face −X and sit with their base on the neck, in metres.
 
 const MODELS = './models/';
+// Base Mii, after design-references/fixed_mii.glb: the head sits HEAD_LIFT above the neck bone, so a short
+// neck shows above the collar instead of the head swallowing it
+const HEAD_LIFT = 0.056;
+// The ripped hairstyles lost the Mii's per-head hair placement, so many sit too tight and the scalp pokes
+// through (a pink bald spot). HAIR_HEAD_LIFT raises hair on the taller head shapes; HAIR_FIT grows a
+// hairstyle about HAIR_PIVOT (mid-head, in head-model space) just enough to clear every head. Measured by
+// raycasting each hair against each head, then checked by eye.
+const HAIR_HEAD_LIFT = { 'head-03': 0.03, 'head-07': 0.03, 'head-08': 0.03 };
+const HAIR_FIT = {
+  'hair-05': 1.05, 'hair-07': 1.075, 'hair-09': 1.05, 'hair-10': 1.03, 'hair-11': 1.035, 'hair-21': 1.05,
+  'hair-25': 1.045, 'hair-26': 1.05, 'hair-28': 1.065, 'hair-29': 1.045, 'hair-31': 1.05, 'hair-59': 1.045, 'hair-61': 1.02, 'hair-60': 1.035,
+};
+const HAIR_PIVOT = [0.04, 0.38];   // x (forward), y (up)
 const assets = {};
 
 // shirt triangles are split into torso / sleeves / hands, pants into legs / shoes, so each part can
@@ -18,15 +31,18 @@ export const SHIRT_PARTS = ['torso', 'sleeve', 'hand'], PANTS_PARTS = ['legs', '
 export async function loadMiiModels() {
   const loader = new GLTFLoader();
   const load = (f) => loader.loadAsync(MODELS + f);
-  const [male, female, heads, hair, hats] = await Promise.all([
+  const [male, female, heads, hair, hairDefault, hats] = await Promise.all([
     load('character-bodies/body-male.glb'), load('character-bodies/body-female.glb'),
-    load('character-heads/heads.glb'), load('character-hair/hair-styles.glb'), load('character-hair/hats.glb'),
+    load('character-heads/heads.glb'), load('character-hair/hair-styles.glb'),
+    load('character-hair/hair-default.glb'),        // the fitted default Mii hair from design-references/fixed_mii.glb
+    load('character-hair/hats.glb'),
   ]);
   assets.bodies = { male: prepBody(male.scene), female: prepBody(female.scene) };
   // the ripped meshes are flat-shaded; Miis are smooth, so weld vertices and recompute soft normals
   const meshes = (scene) => { const out = {}; scene.traverse((o) => { if (o.isMesh) { o.geometry = smooth(o.geometry); out[o.name] = o; } }); return out; };
   assets.heads = meshes(heads.scene);
   assets.hair = meshes(hair.scene);
+  assets.hair['hair-default'] = Object.values(meshes(hairDefault.scene))[0];
   hats.scene.traverse((o) => { if (o.isMesh) o.geometry = smooth(o.geometry, true); });
   assets.hats = { cap: hats.scene.getObjectByName('cap'), beanie: hats.scene.getObjectByName('beanie') };
   assets.boneCtl = boneControls(assets.bodies.male);
@@ -256,10 +272,18 @@ function faceTexture(f) {
   g.strokeStyle = 'rgba(95,40,25,.65)'; g.lineWidth = 3.5;
   for (const sd of [-1, 1]) { g.beginPath(); g.arc(cx + sd * nw * 0.55, ny, nw * 0.42, sd > 0 ? -P * 0.35 : P * 0.6, sd > 0 ? P * 0.4 : P * 1.35); g.stroke(); }
 
-  // moustache (over the top lip)
+  // moustache (over the top lip); a goatee brings its own moustache plus a patch on the chin
   const my = ey + M(0.135), mw = M(f.mouthW || 0.045);
-  if (f.moustache) {
-    g.fillStyle = f.moustache;
+  const tache = f.moustache || f.goatee;
+  if (f.goatee) {
+    g.fillStyle = f.goatee;
+    g.beginPath(); g.moveTo(cx - mw * 0.75, my + M(0.022));
+    g.quadraticCurveTo(cx - mw * 0.8, my + M(0.07), cx, my + M(0.078));
+    g.quadraticCurveTo(cx + mw * 0.8, my + M(0.07), cx + mw * 0.75, my + M(0.022));
+    g.quadraticCurveTo(cx, my + M(0.034), cx - mw * 0.75, my + M(0.022)); g.fill();
+  }
+  if (tache) {
+    g.fillStyle = tache;
     g.beginPath(); g.moveTo(cx, my - M(0.028));
     g.bezierCurveTo(cx + mw * 0.7, my - M(0.04), cx + mw * 1.3, my - M(0.02), cx + mw * 1.25, my - M(0.0));
     g.bezierCurveTo(cx + mw * 0.8, my - M(0.012), cx + mw * 0.3, my - M(0.014), cx, my - M(0.012));
@@ -303,7 +327,7 @@ const earGeo = new THREE.SphereGeometry(1, 16, 12).scale(0.024, 0.05, 0.036);
  * Build one Mii: body (cloned skinned rig), head, face, hair or hat.
  * Returns the model plus the bones and frames that characters.js hangs accessories on.
  */
-export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat = null, hatColor, face, mat, outlineMat, outlineHeadMat, colors }) {
+export function buildMii({ gender = 'male', head = 'head-01', headWidth = 1, hair = null, hat = null, hatColor, face, mat, outlineMat, outlineHeadMat, colors }) {
   const model = SkeletonUtils.clone(assets.bodies[gender]);
   const bone = (n) => model.getObjectByName(n);
   const parts = {};
@@ -319,7 +343,8 @@ export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat =
   });
 
   // head frame: character axes in metres, origin at the neck, turning with the head bone
-  const headFrame = frameOn(bone('head'));
+  const headFrame = new THREE.Group(); headFrame.position.y = HEAD_LIFT; headFrame.scale.x = headWidth;   // headWidth > 1 = broad face
+  frameOn(bone('head')).add(headFrame);
   const headSrc = assets.heads[head] || assets.heads['head-01'];
   const headMesh = new THREE.Mesh(headSrc.geometry, parts.skin = mat(colors.skin, 'skin'));
   headMesh.rotation.y = Math.PI / 2; headFrame.add(headMesh);
@@ -334,7 +359,11 @@ export function buildMii({ gender = 'male', head = 'head-01', hair = null, hat =
 
   if (hair && !hat && assets.hair[hair]) {
     const h = new THREE.Mesh(assets.hair[hair].geometry, parts.hair = mat(colors.hair, 'hair'));
-    parts.hair.side = THREE.DoubleSide; h.rotation.y = Math.PI / 2; headFrame.add(h);
+    parts.hair.side = THREE.DoubleSide; h.rotation.y = Math.PI / 2;
+    const k = HAIR_FIT[hair] ?? 1, [px, py] = HAIR_PIVOT;
+    h.scale.setScalar(k);   // grow about the pivot (head-model +x is the frame's −z after the turn), then lift
+    h.position.set(0, py * (1 - k) + (HAIR_HEAD_LIFT[head] ?? 0), -px * (1 - k));
+    headFrame.add(h);
   }
   if (hat) {
     const h = assets.hats[hat].clone(); h.rotation.y = Math.PI / 2;
