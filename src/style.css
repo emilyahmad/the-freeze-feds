@@ -1,12 +1,20 @@
 :root {
-  --ink: #3c2f6b; --accent: #8c6fe0; --lilac: #c9b5ff; --ice: #8fd8ff; --good: #2fbf7a; --bad: #ff5a6a;
+  --ink: #36474b; --accent: #7db9c9; --lilac: #96e6fd; --ice: #8fd8ff; --good: #2fbf7a; --bad: #ff5a6a;
   --card: rgba(250, 246, 255, .94); --plum: rgba(50, 25, 110, .35);
 }
+
+@font-face {
+  font-family: "papas";
+  src: url('../public/papayo-regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
-  font-family: Fredoka, system-ui, sans-serif; color: var(--ink);
-  background: linear-gradient(180deg, #3a2a6b 0%, #7a5fc0 55%, #e7b8d8 100%);
+  font-family: "papas", system-ui, sans-serif; color: var(--ink);
+  background: linear-gradient(180deg, #36474b 0%, #7db9c9 55%, #96e6fd 100%);
 }
 
 #stage { position: absolute; overflow: hidden; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
@@ -64,7 +72,7 @@ body {
 .panel ul { text-align: left; margin: 0 auto 14px; padding-left: 20px; line-height: 1.6; max-width: 360px; }
 button.go {
   font: inherit; font-size: 19px; font-weight: 600; color: #fff; cursor: pointer;
-  background: linear-gradient(180deg, #a58bf0, #7f62d8); border: 3px solid #fff; border-radius: 999px; padding: 9px 28px;
-  box-shadow: 0 4px 0 #5e45b5, 0 8px 16px rgba(60, 30, 140, .3); transition: transform .1s;
+  background: linear-gradient(180deg, var(--lilac), var(--accent)); border: 3px solid #fff; border-radius: 999px; padding: 9px 28px;
+  box-shadow: 0 4px 0 var(--ink), 0 8px 16px rgba(60, 30, 140, .3); transition: transform .1s;
 }
 button.go:hover { transform: translateY(-2px) scale(1.03); }

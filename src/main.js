@@ -6,7 +6,7 @@ import { HoverCard, hud, popup, snowBurst, wrongFlash, showScreen } from './ui.j
 import * as sfx from './sfx.js';
 import { loadMiiModels } from './mii.js';
 
-const ROUND_TIME = 120, BONUS = 10, PENALTY = 10;
+const ROUND_TIME = 60, BONUS = 10, PENALTY = 10;
 const debug = new URLSearchParams(location.search).has('debug');
 const $ = (s) => document.querySelector(s);
 
