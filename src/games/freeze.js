@@ -224,7 +224,7 @@ export function createFreeze(ctx, { time = ROUND_TIME, onEnd, onDone }) {
         a.person.updateMatrixWorld(true);
         const from = toScreen(a.person.userData.snowball.getWorldPosition(_v));
         snowBack(from, {   // a blob where it hits, until the very last ball, which buries the whole screen
-          far: true, text: a.name, size: i === order.length - 1 ? 0 : BLOB_SIZE[0] + Math.random() * (BLOB_SIZE[1] - BLOB_SIZE[0]),
+          far: true, size: i === order.length - 1 ? 0 : BLOB_SIZE[0] + Math.random() * (BLOB_SIZE[1] - BLOB_SIZE[0]),
           onImpact: () => sfx.splat(),
           onDone: () => { if (++cleared === order.length) later(FINALE_HOLD, done); },
         });

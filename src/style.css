@@ -287,7 +287,6 @@ button.go:hover { transform: translateY(-2px) scale(1.03); }
 .splat.blob { inset: auto; filter: drop-shadow(0 .3vmax .8vmax rgba(40, 80, 120, .35)); }
 .splat.blob .splat-body { inset: 0; border-radius: 50%; }
 .splat.blob .splat-trail { left: 15%; right: 15%; height: 40vh; }
-.splat.blob .splat-text { top: 50%; width: 92%; white-space: normal; text-align: center; line-height: 1; }   /* the thrower's name */
 .splat-text { position: absolute; left: 50%; top: 40%; translate: -50% -50%; rotate: -6deg; white-space: nowrap;
   font: 700 clamp(36px, 7vw, 96px) Itim, system-ui, sans-serif; color: var(--bad); text-shadow: 0 .05em 0 #fff, 0 .08em .2em rgba(120, 30, 50, .25); }
 

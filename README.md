@@ -19,11 +19,12 @@ A take on Find Mii but you're the freeze police and you're freezing tech execs i
 
 
 
-Hardware idea:
+<!-- Hardware idea: -->
 <p align="center">
-  <img src="design-references/hardware-ideas.jpeg" alt="Hardware idea" width="50%">
+  <img src="design-references/demo.png" alt="The Freeze Feds demo" width="85%">
 </p>
 
+<!--
 navigate the screen using macropad:
 macropad functions:
 * starts by selecting Mii on the very left (stays selected), then users can you use SW1 (left) and SW2 (right) to select Miis. If they want to inspect a Mii (view their linkedIn), they can press SW3 and the mii will come forward. Once they are inspecting the Mii, they can press Sw3 again to relesae then, or Sw4 to trigger the snowball throwing, and then the game continues.
@@ -51,3 +52,4 @@ The pad is the s'mores-pad (Seeed XIAO ESP32-C3 with a 128x32 OLED). Just like i
 | SW4 | Space | – | Freeze: opens the snowball cam (press again to throw without the gesture) |
 
 On the title and end screens, SW3 (Enter) presses the button. A normal keyboard's arrows, Enter and Space do the same. Moving the mouse switches back to mouse control.
+-->

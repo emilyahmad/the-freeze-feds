@@ -65,7 +65,7 @@ export function snowBack(from, { text = '', far = false, size = 0, onImpact, onD
   ball.animate(frames, { duration: BACK_FLY * 1000, easing: 'linear', fill: 'forwards' }).onfinish = () => {
     if (!ball.isConnected) return;                           // cleared mid-flight (round restarted)
     ball.remove();
-    if (D) return blob(stage, to, D, h, text, onImpact, onDone);
+    if (D) return blob(stage, to, D, h, onImpact, onDone);
     const splat = Object.assign(document.createElement('div'), { className: 'splat' });
     const body = Object.assign(document.createElement('div'), { className: 'splat-body' });
     const trail = Object.assign(document.createElement('div'), { className: 'splat-trail' });
@@ -100,9 +100,8 @@ export function snowBack(from, { text = '', far = false, size = 0, onImpact, onD
   };
 }
 
-/** A partial splat: a lumpy round blob of snow `D` px across centred on `at` (with `text` written in it), which sticks,
- *  then slides off the bottom. */
-function blob(stage, at, D, h, text, onImpact, onDone) {
+/** A partial splat: a lumpy round blob of snow `D` px across centred on `at`, which sticks, then slides off the bottom. */
+function blob(stage, at, D, h, onImpact, onDone) {
   const splat = Object.assign(document.createElement('div'), { className: 'splat blob' });
   splat.style.cssText = `left:${at.x - D / 2}px;top:${at.y - D / 2}px;width:${D}px;height:${D}px`;
   const body = Object.assign(document.createElement('div'), { className: 'splat-body' });
@@ -124,8 +123,6 @@ function blob(stage, at, D, h, text, onImpact, onDone) {
     body.appendChild(Object.assign(document.createElement('span'), { className: 'splat-clump' }))
       .style.cssText = `width:${s}%;height:${s}%;left:${20 + Math.random() * 60 - s / 2}%;top:${25 + Math.random() * 50}%`;
   }
-  if (text) body.appendChild(Object.assign(document.createElement('div'), { className: 'splat-text', textContent: text }))
-    .style.fontSize = `${Math.round(D * 0.13)}px`;
   stage.appendChild(splat);
   onImpact?.();
   const drop = h - at.y + D, total = 120 + BACK_HOLD * 1000 + BACK_SLIDE * 1000, t = (ms) => ms / total;
