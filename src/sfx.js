@@ -8,7 +8,21 @@ export async function tryStart(timeout = 300) {
   if (ctx.state !== 'running') await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, timeout))]);
   return ctx.state === 'running';
 }
-export function toggleMute() { muted = !muted; applyWalk(); applyMurmur(); return muted; }
+export function toggleMute() { muted = !muted; applyWalk(); applyMurmur(); applyBeat(); return muted; }
+
+// Beatbox bed (public/sounds/beatbox.mp3): loops from the title screen straight through the round.
+const BEAT_URL = 'sounds/beatbox.mp3', BEAT_VOL = 0.62;
+let beat = null;
+export function startBeatbox() {
+  beat ??= Object.assign(new Audio(BEAT_URL), { loop: true, preload: 'auto' });
+  applyBeat();
+  const p = beat.play();
+  if (p) p.catch(() => {});   // autoplay can be blocked until the first click; that click calls this again
+}
+function applyBeat() {
+  if (!beat) return;
+  beat.volume = muted ? 0 : BEAT_VOL;
+}
 
 function tone(type, f0, f1, dur, vol = 0.2, when = 0) {
   if (!ctx || muted) return;

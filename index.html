@@ -13,7 +13,7 @@
   <div id="stage">
     <!-- the street photo, scaled to cover the window (main.js layout); things pinned to the photo go in here -->
     <div id="photo">
-    <img id="bg" src="./street.webp" alt="" draggable="false" />
+    <img id="bg" src="./street.PNG" alt="" draggable="false" />
     <!-- the pedestrian signal in the photo: covered with a "don't walk" hand that blinks (src/signal.js) -->
     <div id="walk-sign" class="stop" aria-hidden="true">
       <svg viewBox="0 0 40 48"><g fill="#ff8a1f">
@@ -132,23 +132,20 @@
 
     <div id="debug-info" hidden></div>
 
-    <div class="screen" id="start-screen" hidden>
-      <div class="panel">
-        <h1>❄ The Freeze Feds ❄</h1>
-        <p>Nine tech CEOs are loose on California &amp; Powell, and it's up to you to catch them in a scandalous act! Hover over anyone to inspect their activity, and click a CEO to freeze them in ice.</p>
-        <ul>
-          <li>Click someone to check their ID, then hit <b>Freeze</b> and punch your fist toward your webcam to throw a snowball, or click anywhere else to let them go.</li>
-          <li>Right catch: <b>+10 s</b></li>
-          <li>Wrong person: <b>−10 s</b></li>
-          <li>Watch how people move. The CEOs don't walk like everyone else.</li>
-        </ul>
-        <button class="go" id="start">Play</button>
+    <!-- title: startscreen.png, then the how-to in the same spot, then the street -->
+    <div id="title-screen">
+      <div id="title-frame">
+        <img src="./startscreen.png" alt="" draggable="false" />
+        <button type="button" id="title-start">START</button>
+        <button type="button" id="title-how" hidden>
+          <span>Nine tech CEOs are loose on California &amp; Powell, and it's up to you to catch them in a scandalous act! Hover over anyone to inspect their activity, and click a CEO to freeze them in ice.</span>
+          <span>Click someone to check their ID, then hit <b>Freeze</b> and punch your fist toward your webcam to throw a snowball, or click anywhere else to let them go.</span>
+          <span>Right catch: <b>+10 s</b></span>
+          <span>Wrong person: <b>−10 s</b></span>
+          <span>Watch how people move. The CEOs don't walk like everyone else.</span>
+          <span class="go-hint">Click to play!</span>
+        </button>
       </div>
-    </div>
-
-    <!-- shown before the intro only if the browser blocks audio until a click (so the WALK tick can play on cue) -->
-    <div class="screen" id="tap-screen" hidden>
-      <button class="go" id="tap">▶ Start</button>
     </div>
 
     <div class="screen" id="over-screen" hidden>
