@@ -1,18 +1,19 @@
 # The Freeze Feds
 
-Web game: a crowd of chibi people walks around a cartoon SF intersection (California & Powell). Hover anyone to inspect them; click a boss to freeze them in ice. 120 s round, +10 s for a right catch, −10 s for a wrong one, ends at 0 s or when all 10 bosses are frozen.
+Web game: a crowd of Mii-style people walks around a cartoon SF intersection (California & Powell). Hover anyone to inspect them; click a boss to freeze them in ice. 120 s round, +10 s for a right catch, −10 s for a wrong one, ends at 0 s or when all 10 bosses are frozen.
 
 - Stack: Vite + Three.js (vanilla JS). `npm install`, `npm run dev` → http://localhost:5173. `npm run build` → `dist/` (relative paths via `base: './'`, ready for GitHub Pages / itch.io).
 - `public/street.webp`: the background photo (1672×941). `index.html` letterboxes a 16:9 `#stage` with the `<img>` behind a transparent WebGL canvas.
 - `src/scene.js`: camera matched to the photo by eye (`CAM_HEIGHT`, `CAM_PITCH_DEG`, `CAM_FOV`) and the walk graph. Waypoints are written in **image pixels** and projected onto the ground plane, so tune them against the photo. `?debug` skips the start screen, draws the grid/waypoints/edges, shows the image-pixel coordinates under the cursor and exposes `window.__game`.
-- `src/characters.js`: placeholder chibi people (`makePerson(look)`): toon material + inverted-hull outline, randomised colours and accessories, invisible hitbox for raycasting. `CEO_TYPES` lists the 10 bosses (parody caricatures of Holmes, Zuckerberg, Huang, Musk, Thiel, Karp, Gates, Bezos, Dimon, Buffett): a fixed `look` (hair style, outfit, prop via `carry`), the hover-card `info` line and a `behavior`. `pose()` animates limbs; `encase()` freezes. To switch to VRoid/VRM models later, replace `makePerson` and keep its `userData` contract (`rig`, `mats`, `outlineMat`, `hitbox`).
+- `src/mii.js`: loads the Mii GLBs from `public/models` (bodies, heads, hair, hats; see its README) before the crowd spawns, and `buildMii()` assembles one: a `SkeletonUtils` clone of the skinned body (shirt split into torso/sleeve/hand and pants into legs/shoes so each gets its own colour), a head shape, a canvas-drawn face projected on with `DecalGeometry`, and a hairstyle or hat. `setBone`/`setChildBone` rotate bones in the character frame (x right, y up, z forward) on top of the T-pose. Outlines are inverted hulls pushed out along normals in the shader, so they follow the skinning. The models are git-ignored, so the game needs them in `public/models` to run.
+- `src/characters.js`: `makePerson(look)` builds a Mii from a look (colours, `head`, `hairModel`, `face`, `gender`) and hangs the accessories on it: glasses, headsets and earbuds on the head frame, collars, ties, scarves and bags on the chest frame, props in the hand frame. `CEO_TYPES` lists the 10 bosses (parody caricatures of Holmes, Zuckerberg, Huang, Musk, Thiel, Karp, Gates, Bezos, Dimon, Buffett): a fixed `look` (hair style, outfit, prop via `carry`), the hover-card `info` line and a `behavior`; `CEO_MII` picks their head, hairstyle and face. `pose()` drives the bones (legs, upper arms and forearms, head); `encase()` freezes. crowd.js relies on the `userData` contract (`rig`, `mats`, `outlineMat`, `hitbox`).
 - `src/crowd.js`: agents and behaviours: `wander` (normals), `pace` (phone pacer), `lead` + `follow` (CEO with two assistants), `pitch` (stops to pitch at passers-by), `speed` (fast walker), `slow` (ambles), `loiter` (long still pauses). Normals sometimes wear a single CEO item (phone, hoodie, vest) as decoys.
 - `src/ui.js`: hover card (close-up rendered with a second camera on layer 1 into a render target), HUD, popups, screens. `src/sfx.js`: WebAudio-synthesised sounds.
-- The bosses are satire: caricatures from public signature looks (hair, outfit, prop) on the generic chibi face, and the hover card describes the outfit rather than naming them. Keep the "Parody" label.
+- The bosses are satire: caricatures from public signature looks (hair, outfit, prop) on a generic Mii face, and the hover card describes the outfit rather than naming them. Keep the "Parody" label.
 
 ## Roadmap (original plan)
 
-The first playable build (steps 1–6 below with placeholder people) is done. Next up: VRoid models, Mixamo walk cycle, animated background.
+The first playable build (steps 1–6 below with placeholder people) is done. The placeholder people have since been replaced with Mii models (`src/mii.js`). Next up: animated background.
 
 Here's a one-day plan. It's web-based, uses free tools only, and uses Three.js for the game itself.
 
