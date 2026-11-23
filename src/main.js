@@ -9,7 +9,9 @@ import { createFreeze } from './games/freeze.js';
 import { createSignal } from './signal.js';
 import { installWiiCursor } from './cursor.js';
 import { installMacropad } from './macropad.js';
+import { inject } from '@vercel/analytics';
 
+inject();
 installWiiCursor();
 
 // The shell: renderer, street scene, crowd, layout, pointer and the animation loop. The round itself lives in
