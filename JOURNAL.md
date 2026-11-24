@@ -25,3 +25,4 @@ I'll start by creating a fresh react app in this branch.
 I ran ```npm install --save-dev @types/react @types/react-dom``` for the most recent Typescript
 
 I don't remember it being this hard to navigate to the commands to create a react app, but it's [here](https://react.dev/learn/creating-a-react-app), I need to figure out whether to use Next.js [or](https://www.reddit.com/r/reactjs/comments/1lhl33w/react_router_v7_or_nextjs_for_building_a/) React Router, I'm seeing a lot more praise for RR7, so I'll install it: ```npx create-react-router@latest``` I don't think I needed to run the previous command (latest version of typescript), as installing RR7 asked to overwrite it. That was actually a bad idea altogether because different dependencies can cause conflicts.
+
