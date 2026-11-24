@@ -206,7 +206,7 @@ const HUSTLE_BANNERS = [['Building in stealth 🥷', '#111111', '#7a7a8a'], ['Se
   ['Profitable since month 3', '#4a0a0a', '#f05a5a'], ['Hiring founding engineers', '#0a0a3a', '#5a7af0'], ['Compute-rich, sleep-poor', '#3a2a0a', '#f0a03a'],
   ['Acquired. Building again.', '#0a3a3a', '#3af0e0'], ['Hard tech only 🛰️', '#2a0a2a', '#f05af0'], ['Ramen profitable 🍜', '#1a1a2a', '#a0a0f0'],
   ['Category creator 🦄', '#3a0a3a', '#f0a0f0'], ['Shipping daily since day 1', '#0a0a2a', '#d0d0f0']];
-// parody profiles for the bosses: hints in the headline, but no real names until they're frozen
+// parody profiles for the bosses: hints in the headline, and only a nickname once they're frozen
 const BOSS = {
   holmes: { head: 'Founder & CEO @ OneDrop Labs | 200 tests from a single finger-prick 🩸 | Visionary', edu: 'Stanford University (left early)', followers: '1,204,118', banner: ['Change everything. One drop.', '#5b0f14', '#c7323c'], hl: 'Celebrating 10 years of stealth mode. Results coming soon.' },
   zuckerberg: { head: 'Founder, Chairman & CEO | Building the metaverse 🥽 | Move fast', edu: 'Harvard University (dropped out)', followers: '119,800,450', banner: ['Connecting everyone 🌐', '#123a8a', '#5d8df5'], hl: 'Hosted a cage fight that never happened.' },
@@ -305,7 +305,7 @@ function draw(list) {
 }
 
 /** Made-up profile for an agent (kept on the agent so re-checking someone shows the same profile).
- *  No names on the profile: a boss's real name only shows on the FROZEN stamp.
+ *  No names on the profile: a boss's nickname only shows on the FROZEN stamp.
  *  Normals: ~40% are decoys that echo a boss's hints, ~20% cracked founders, the rest cracked engineers. */
 export function profileFor(agent) {
   if (!agent.profile) {

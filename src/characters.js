@@ -23,23 +23,23 @@ const colorName = (hex, list = [...SHIRTS, ...CEO_COLORS]) => (list.find(([h]) =
 // Built from signature looks only (hair, outfit, a prop) on the generic chibi face.
 // `info` is the hover-card line; `behavior` is their movement tell (see crowd.js).
 export const CEO_TYPES = [
-  { id: 'holmes', name: 'Elizabeth Holmes', behavior: 'pace', info: 'Black turtleneck, long blonde hair pulled back, pale, wide unblinking eyes, tiny blood-test gadget',
+  { id: 'holmes', name: 'The Finger-Prick Founder', behavior: 'pace', info: 'Black turtleneck, long blonde hair pulled back, pale, wide unblinking eyes, tiny blood-test gadget',
     look: { skin: '#f9e4d6', hair: '#dcc48e', hairStyle: 'long', outfit: 'turtleneck', shirt: '#17171b', pants: '#17171b', bigEyes: true, carry: 'device' } },
-  { id: 'zuckerberg', name: 'Mark Zuckerberg', behavior: 'speed', info: 'Plain tee, short brown hair, youthful face, VR headset on',
+  { id: 'zuckerberg', name: 'The Metaverse Guy', behavior: 'speed', info: 'Plain tee, short brown hair, youthful face, VR headset on',
     look: { skin: '#f3d3bc', hair: '#5a3b26', hairStyle: 'short', shirt: '#4a5d93', pants: '#2f3e5c', headset: true } },
-  { id: 'huang', name: 'Jensen Huang', behavior: 'pitch', info: 'Black leather jacket, short grey-black hair, glasses, waving a graphics chip',
+  { id: 'huang', name: 'The Leather Jacket CEO', behavior: 'pitch', info: 'Black leather jacket, short grey-black hair, glasses, waving a graphics chip',
     look: { skin: '#e6bf98', hair: '#5f5f66', hairStyle: 'swept', shirt: '#141418', jacket: '#141418', pants: '#141418', glasses: 'square', glassesColor: '#2a2a30', carry: 'gpu' } },
-  { id: 'thiel', name: 'Peter Thiel', behavior: 'loiter', info: 'Short brown-grey hair, round face, charcoal suit and tie',
+  { id: 'thiel', name: 'The Contrarian Investor', behavior: 'loiter', info: 'Short brown-grey hair, round face, charcoal suit and tie',
     look: { skin: '#f3d6c2', hair: '#6e6258', hairStyle: 'short', outfit: 'suit', shirt: '#33363e', pants: '#33363e', collar: '#ffffff', tie: '#2c4a9a' } },
-  { id: 'karp', name: 'Alex Karp', behavior: 'pitch', info: 'Balding, stubbly beard, olive military-style jacket',
+  { id: 'karp', name: 'The Seeing-Stone CEO', behavior: 'pitch', info: 'Balding, stubbly beard, olive military-style jacket',
     look: { skin: '#ecc9a8', hair: '#7a7268', hairStyle: 'receding', shirt: '#2a2a2e', jacket: '#59613f', pants: '#3a3d30' } },
-  { id: 'gates', name: 'Bill Gates', behavior: 'pace', info: 'Grey-white hair, glasses, navy sweater over a collared shirt',
+  { id: 'gates', name: 'The Retired Software Guy', behavior: 'pace', info: 'Grey-white hair, glasses, navy sweater over a collared shirt',
     look: { skin: '#f3d0bc', hair: '#c4c0b8', hairStyle: 'short', outfit: 'sweater', shirt: '#242b44', pants: '#6b5b45', collar: '#d6e4f2', glasses: 'square', glassesColor: '#2c2c34' } },
-  { id: 'bezos', name: 'Jeff Bezos', behavior: 'lead', info: 'Shiny bald head, bushy eyebrows, trimmed goatee, fitted grey jacket, carrying a cardboard box',
+  { id: 'bezos', name: 'The Bookstore Mogul', behavior: 'lead', info: 'Shiny bald head, bushy eyebrows, trimmed goatee, fitted grey jacket, carrying a cardboard box',
     look: { skin: '#efc6a6', hair: '#3a2a20', hairStyle: 'bald', brows: '#3a2a20', shirt: '#a9c8ea', jacket: '#555a63', pants: '#2f3e5c', collar: '#b4d0ee', carry: 'box' } },
-  { id: 'dimon', name: 'Jamie Dimon', behavior: 'lead', info: 'Short grey hair, broad face, dark suit and tie',
+  { id: 'dimon', name: 'The Big Bank Boss', behavior: 'lead', info: 'Short grey hair, broad face, dark suit and tie',
     look: { skin: '#eec4a6', hair: '#c9cacf', hairStyle: 'short', outfit: 'suit', shirt: '#1e2944', pants: '#1e2944', collar: '#ffffff', tie: '#5b6d8e' } },
-  { id: 'buffett', name: 'Warren Buffett', behavior: 'slow', info: 'White hair, glasses, older face, navy suit and red tie, can of soda',
+  { id: 'buffett', name: 'The Omaha Investor', behavior: 'slow', info: 'White hair, glasses, older face, navy suit and red tie, can of soda',
     look: { skin: '#f2cdb8', hair: '#f2f2f4', hairStyle: 'short', outfit: 'suit', shirt: '#26304a', pants: '#26304a', collar: '#ffffff', tie: '#9a2b2b', glasses: 'round', glassesColor: '#6a5848', brows: '#f2f2f4', carry: 'soda' } },
 ];
 

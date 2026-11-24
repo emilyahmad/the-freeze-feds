@@ -157,7 +157,6 @@ function overScreen(r) {
   const line = (html) => { const d = document.createElement('div'); d.innerHTML = html; stats.append(d); return d; };
   line(`You froze <b>${r.caught} of ${r.ceoCount}</b> CEOs` + (r.won ? ` with <b>${Math.ceil(r.timeLeft)} s</b> to spare` : '') + `. Wrong catches: ${r.wrong}`);
   if (r.frozen.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `❄ Frozen: ${list(r.frozen)}` }));
-  if (r.escaped.length) line('').append(Object.assign(document.createElement('span'), { className: 'names', textContent: `🏃 Got away: ${list(r.escaped)}` }));
   showScreen('over-screen');
 }
 
