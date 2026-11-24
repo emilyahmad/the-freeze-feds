@@ -1,5 +1,0 @@
-node_modules/
-dist/
-
-# original model files (converted to GLB in public/models)
-model-sources/
